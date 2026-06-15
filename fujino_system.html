@@ -1,0 +1,3064 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>藤野晃司完全管理システム</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+<style>
+:root {
+  --bg: #0a0a0a;
+  --bg2: #111111;
+  --bg3: #181818;
+  --bg4: #202020;
+  --border: #2a2a2a;
+  --border2: #333;
+  --gold: #c9a84c;
+  --gold2: #e8c96a;
+  --gold3: #f5e090;
+  --text: #f0f0f0;
+  --text2: #aaa;
+  --text3: #666;
+  --red: #e05252;
+  --orange: #e09a3a;
+  --blue: #4488dd;
+  --green: #52b07a;
+  --sidebar-w: 270px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text);height:100vh;overflow:hidden;font-size:14px;}
+a{color:var(--gold);text-decoration:none;}
+input,textarea,select{background:var(--bg3);color:var(--text);border:1px solid var(--border2);border-radius:6px;padding:8px 12px;font-family:inherit;font-size:14px;outline:none;width:100%;}
+input:focus,textarea:focus,select:focus{border-color:var(--gold);}
+select option{background:var(--bg3);}
+button{cursor:pointer;font-family:inherit;border:none;outline:none;}
+label{display:block;font-size:12px;color:var(--text2);margin-bottom:4px;}
+.radio-opt{display:inline-flex;align-items:center;gap:5px;cursor:pointer;font-size:13px;color:var(--text);}
+.hidden{display:none!important;}
+
+/* SETUP OVERLAY */
+#setup-overlay{position:fixed;inset:0;background:var(--bg);z-index:9999;display:flex;align-items:center;justify-content:center;}
+.setup-card{background:var(--bg2);border:1px solid var(--gold);border-radius:12px;padding:40px;width:min(500px,90vw);}
+.setup-card h1{font-size:22px;color:var(--gold);margin-bottom:8px;letter-spacing:2px;}
+.setup-card p{color:var(--text2);font-size:13px;margin-bottom:24px;line-height:1.7;}
+.setup-card .field{margin-bottom:14px;}
+.setup-card .hint{font-size:11px;color:var(--text3);margin-top:16px;line-height:1.7;}
+.setup-card a{color:var(--gold2);}
+
+/* APP LAYOUT */
+#app{display:flex;height:100vh;overflow:hidden;}
+
+/* SIDEBAR */
+#sidebar{width:var(--sidebar-w);min-width:var(--sidebar-w);background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;transition:width .25s,min-width .25s;overflow:hidden;position:relative;z-index:100;}
+#sidebar.collapsed{width:0;min-width:0;}
+.sidebar-inner{width:var(--sidebar-w);flex:1;display:flex;flex-direction:column;overflow:hidden;}
+.sidebar-header{padding:18px 16px 12px;border-bottom:1px solid var(--border);flex-shrink:0;}
+.sidebar-title{font-size:11px;font-weight:700;color:var(--gold);letter-spacing:2px;line-height:1.4;}
+.sidebar-subtitle{font-size:10px;color:var(--text3);margin-top:2px;}
+.collapse-btn{position:absolute;top:16px;right:10px;background:none;color:var(--text3);font-size:16px;padding:4px 8px;border-radius:4px;transition:color .2s;}
+.collapse-btn:hover{color:var(--gold);}
+.sidebar-nav{padding:10px 8px;flex-shrink:0;border-bottom:1px solid var(--border);}
+.nav-btn{display:flex;align-items:center;gap:10px;width:100%;padding:9px 12px;border-radius:7px;background:none;color:var(--text2);font-size:13px;font-weight:500;transition:all .2s;margin-bottom:2px;}
+.nav-btn:hover{background:var(--bg3);color:var(--text);}
+.nav-btn.active{background:var(--bg4);color:var(--gold);}
+.nav-btn .icon{font-size:15px;width:20px;text-align:center;flex-shrink:0;}
+.nav-btn.立件-btn{background:linear-gradient(135deg,#2a1f00,#1a1200);color:var(--gold);border:1px solid #3a2a00;}
+.nav-btn.立件-btn:hover{background:linear-gradient(135deg,#3a2f00,#2a1f00);border-color:var(--gold);}
+.sidebar-projects{flex:1;overflow-y:auto;padding:10px 8px;}
+.sidebar-search{position:relative;margin-bottom:10px;}
+.sidebar-search input{font-size:12px;padding:7px 10px 7px 30px;background:var(--bg3);}
+.sidebar-search .s-icon{position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:13px;}
+.proj-item{display:flex;align-items:center;gap:6px;padding:7px 8px;border-radius:6px;cursor:pointer;transition:background .15s;min-width:0;}
+.proj-item:hover{background:var(--bg3);}
+.proj-item.active{background:var(--bg4);}
+.proj-star{background:none;color:var(--text3);font-size:14px;flex-shrink:0;padding:0;line-height:1;transition:color .2s;}
+.proj-star.starred{color:var(--gold);}
+.proj-star:hover{color:var(--gold2);}
+.proj-name{font-size:12px;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;}
+.proj-item.active .proj-name{color:var(--text);}
+.proj-type-badge{font-size:10px;padding:1px 5px;border-radius:3px;flex-shrink:0;}
+.badge-komonor{background:#1a2a1a;color:#52b07a;}
+.badge-spot{background:#2a1a1a;color:#e05252;}
+.badge-other{background:#1a1a2a;color:#6688dd;}
+.sidebar-section-title{font-size:10px;color:var(--text3);letter-spacing:1px;padding:6px 8px 3px;font-weight:700;}
+.sidebar-divider{border:none;border-top:1px solid var(--border);margin:6px 0;}
+
+/* MAIN */
+#main{flex:1;overflow-y:auto;display:flex;flex-direction:column;min-width:0;}
+.page-header{padding:20px 28px 0;flex-shrink:0;}
+.page-title{font-size:20px;font-weight:700;letter-spacing:1px;}
+.page-title span{color:var(--gold);}
+.page-content{padding:20px 28px;flex:1;}
+
+/* TOPBAR (mobile toggle + expand sidebar) */
+#topbar{display:none;padding:12px 16px;background:var(--bg2);border-bottom:1px solid var(--border);align-items:center;gap:12px;flex-shrink:0;}
+.menu-btn{background:none;color:var(--text2);font-size:20px;padding:4px;}
+.topbar-title{font-size:13px;font-weight:700;color:var(--gold);letter-spacing:1px;}
+.sidebar-expand-btn{position:fixed;left:0;top:50%;transform:translateY(-50%);background:var(--bg2);border:1px solid var(--gold);border-left:none;border-radius:0 8px 8px 0;padding:10px 8px;color:var(--gold);font-size:14px;cursor:pointer;z-index:99;transition:all .2s;box-shadow:2px 0 8px rgba(201,168,76,.2);}
+.sidebar-expand-btn:hover{background:var(--bg3);box-shadow:2px 0 12px rgba(201,168,76,.4);}
+
+/* CARDS */
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:18px;}
+.card-title{font-size:13px;font-weight:700;color:var(--text2);letter-spacing:1px;margin-bottom:14px;}
+.card-grid{display:grid;gap:14px;}
+
+/* BUTTONS */
+.btn{padding:9px 18px;border-radius:7px;font-size:13px;font-weight:500;transition:all .2s;}
+.btn-gold{background:linear-gradient(135deg,var(--gold),#a07830);color:#000;font-weight:700;}
+.btn-gold:hover{background:linear-gradient(135deg,var(--gold2),var(--gold));}
+.btn-outline{background:none;border:1px solid var(--border2);color:var(--text2);}
+.btn-outline:hover{border-color:var(--gold);color:var(--gold);}
+.btn-ghost{background:none;color:var(--text2);}
+.btn-ghost:hover{color:var(--text);}
+.btn-danger{background:#2a0a0a;border:1px solid var(--red);color:var(--red);}
+.btn-danger:hover{background:#3a1010;}
+.btn-sm{padding:5px 12px;font-size:12px;}
+.btn-xs{padding:3px 8px;font-size:11px;}
+
+/* DASHBOARD */
+.dashboard-timer{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:18px 22px;display:flex;align-items:center;gap:20px;margin-bottom:20px;flex-wrap:wrap;}
+.timer-display{font-size:28px;font-weight:300;color:var(--gold);letter-spacing:3px;font-variant-numeric:tabular-nums;}
+.timer-project{font-size:12px;color:var(--text2);}
+.timer-btn{padding:10px 24px;border-radius:8px;font-size:14px;font-weight:700;letter-spacing:1px;}
+.timer-start{background:linear-gradient(135deg,#0a3a0a,#1a5a1a);color:#52c05a;border:1px solid #2a5a2a;}
+.timer-start:hover{background:linear-gradient(135deg,#1a5a1a,#2a7a2a);}
+.timer-stop{background:linear-gradient(135deg,#3a0a0a,#5a1a1a);color:#e05252;border:1px solid #5a2a2a;}
+.timer-stop:hover{background:linear-gradient(135deg,#5a1a1a,#7a2a2a);}
+.timer-proj-select{flex:1;min-width:180px;}
+
+/* CALENDAR */
+.cal-wrap{background:var(--bg2);border:1px solid var(--border);border-radius:10px;overflow:hidden;}
+.cal-header{display:grid;grid-template-columns:50px repeat(7,1fr);border-bottom:1px solid var(--border);}
+.cal-h-cell{padding:8px 4px;text-align:center;font-size:11px;color:var(--text2);border-left:1px solid var(--border);}
+.cal-h-cell:first-child{border-left:none;}
+.cal-h-cell.today{color:var(--gold);font-weight:700;}
+.cal-body{display:flex;max-height:calc(100vh - 300px);overflow-y:auto;}
+.cal-time-col{width:50px;flex-shrink:0;}
+.cal-time-cell{height:48px;display:flex;align-items:flex-start;justify-content:flex-end;padding:3px 6px 0 0;font-size:10px;color:var(--text3);border-bottom:1px solid var(--border);}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);flex:1;}
+.cal-slot{height:48px;border-left:1px solid var(--border);border-bottom:1px solid var(--border);cursor:pointer;position:relative;transition:background .1s;}
+.cal-slot:hover{background:var(--bg3);}
+.cal-entry{position:absolute;inset:1px;border-radius:4px;font-size:10px;padding:2px 4px;overflow:hidden;cursor:pointer;z-index:2;}
+.cal-week-nav{display:flex;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid var(--border);}
+.cal-week-label{font-size:13px;color:var(--text);font-weight:500;}
+
+/* TASK LIST */
+.task-tabs{display:flex;gap:4px;margin-bottom:16px;flex-wrap:wrap;}
+.tab-btn{padding:7px 16px;border-radius:6px;background:none;border:1px solid var(--border);color:var(--text3);font-size:13px;font-weight:500;transition:all .2s;}
+.tab-btn:hover{border-color:var(--border2);color:var(--text2);}
+.tab-btn.active{background:var(--bg3);border-color:var(--gold);color:var(--gold);}
+.task-card{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;gap:12px;cursor:grab;position:relative;transition:border-color .2s;overflow:hidden;}
+.task-card:hover{border-color:var(--border2);}
+.task-card:active{cursor:grabbing;}
+.task-card::after{content:'';position:absolute;right:0;top:0;bottom:0;width:4px;border-radius:0 8px 8px 0;}
+.task-card.due-past::after{background:var(--red);}
+.task-card.due-today::after{background:var(--orange);}
+.task-card.due-future::after{background:var(--blue);}
+.task-check{width:18px;height:18px;border-radius:50%;border:2px solid var(--border2);flex-shrink:0;cursor:pointer;transition:all .2s;background:none;display:flex;align-items:center;justify-content:center;}
+.task-check:hover{border-color:var(--green);}
+.task-check.checked{background:var(--green);border-color:var(--green);}
+.task-info{flex:1;min-width:0;}
+.task-name{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.task-meta{display:flex;gap:10px;margin-top:3px;font-size:11px;color:var(--text3);flex-wrap:wrap;}
+.task-proj-link{color:var(--gold);cursor:pointer;font-size:11px;}
+.task-proj-link:hover{color:var(--gold2);}
+.task-due-badge{font-size:10px;padding:2px 6px;border-radius:3px;}
+.due-past-badge{background:#2a0a0a;color:var(--red);}
+.due-today-badge{background:#2a1a00;color:var(--orange);}
+.due-future-badge{background:#0a1a2a;color:var(--blue);}
+.task-drag-handle{color:var(--text3);font-size:14px;cursor:grab;padding:2px 4px;}
+.add-task-btn{display:flex;align-items:center;gap:8px;padding:10px 14px;border-radius:8px;border:1px dashed var(--border2);background:none;color:var(--text3);width:100%;font-size:13px;transition:all .2s;margin-bottom:8px;}
+.add-task-btn:hover{border-color:var(--gold);color:var(--gold);}
+.task-estimate{font-size:10px;background:var(--bg3);padding:2px 6px;border-radius:3px;color:var(--text3);}
+
+/* PROJECT LIST */
+.proj-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;}
+.proj-card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:16px;cursor:pointer;transition:all .2s;}
+.proj-card:hover{border-color:var(--gold);transform:translateY(-1px);}
+.proj-card-header{display:flex;align-items:flex-start;gap:10px;margin-bottom:10px;}
+.proj-card-name{font-size:15px;font-weight:700;flex:1;line-height:1.3;}
+.proj-card-type{font-size:10px;padding:2px 8px;border-radius:10px;margin-top:3px;}
+.proj-card-meta{font-size:11px;color:var(--text3);line-height:1.8;}
+.proj-card-tasks{margin-top:10px;padding-top:10px;border-top:1px solid var(--border);font-size:11px;color:var(--text3);}
+.proj-card-tasks .t-count{color:var(--gold);font-weight:700;}
+
+/* PROJECT PAGE */
+.proj-page-header{padding:20px 28px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap;}
+.proj-page-name{font-size:22px;font-weight:700;flex:1;}
+.proj-page-badges{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;}
+.proj-page-content{padding:20px 28px;}
+.section-title{font-size:12px;font-weight:700;color:var(--gold);letter-spacing:2px;margin-bottom:12px;display:flex;align-items:center;gap:8px;}
+.section-title::after{content:'';flex:1;height:1px;background:var(--border);}
+.info-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-bottom:20px;}
+.info-item label{font-size:11px;color:var(--text3);margin-bottom:3px;}
+.info-item .value{font-size:14px;color:var(--text);}
+.info-item .value a{color:var(--gold);}
+.memo-box{background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:14px;min-height:120px;white-space:pre-wrap;font-size:13px;color:var(--text2);cursor:pointer;line-height:1.7;}
+.memo-box:empty::before{content:'メモを追加...';color:var(--text3);}
+.editable-memo{resize:vertical;min-height:120px;line-height:1.7;}
+.copy-btn{display:flex;align-items:center;gap:8px;padding:10px 18px;border-radius:8px;background:linear-gradient(135deg,#1a1000,#2a1800);border:1px solid var(--gold);color:var(--gold);font-size:13px;font-weight:700;transition:all .2s;}
+.copy-btn:hover{background:linear-gradient(135deg,#2a1800,#3a2800);}
+.sales-table{width:100%;border-collapse:collapse;font-size:13px;}
+.sales-table th{padding:8px 10px;text-align:left;font-size:11px;color:var(--text3);font-weight:600;border-bottom:1px solid var(--border);}
+.sales-table td{padding:8px 10px;border-bottom:1px solid var(--border);}
+.sales-table tr:last-child td{border-bottom:none;}
+.sales-table .amount{font-weight:700;color:var(--gold);}
+.sales-total{text-align:right;padding:12px 0;font-size:15px;font-weight:700;color:var(--gold);}
+.completed-tasks-toggle{background:none;border:1px solid var(--border);color:var(--text3);padding:9px 16px;border-radius:6px;font-size:12px;width:100%;transition:all .2s;margin-top:20px;}
+.completed-tasks-toggle:hover{border-color:var(--border2);color:var(--text2);}
+
+/* FORMS */
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.form-field{margin-bottom:16px;}
+.form-field label{font-size:12px;color:var(--text2);margin-bottom:5px;display:block;}
+.type-select-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:24px;}
+.type-card{background:var(--bg3);border:2px solid var(--border);border-radius:10px;padding:18px 14px;cursor:pointer;text-align:center;transition:all .2s;}
+.type-card:hover{border-color:var(--border2);}
+.type-card.selected{border-color:var(--gold);background:var(--bg4);}
+.type-card .type-icon{font-size:28px;margin-bottom:8px;}
+.type-card .type-name{font-size:14px;font-weight:700;color:var(--text);}
+.type-card .type-desc{font-size:11px;color:var(--text3);margin-top:4px;}
+.step-indicator{display:flex;align-items:center;gap:0;margin-bottom:24px;}
+.step{padding:8px 16px;font-size:12px;color:var(--text3);background:var(--bg3);border:1px solid var(--border);}
+.step:first-child{border-radius:6px 0 0 6px;}
+.step:last-child{border-radius:0 6px 6px 0;}
+.step.active{background:var(--bg4);color:var(--gold);border-color:var(--gold);}
+.step.done{color:var(--green);border-color:var(--border);}
+
+/* SALES PAGES */
+.month-nav{display:flex;align-items:center;gap:14px;margin-bottom:20px;}
+.month-label{font-size:18px;font-weight:700;color:var(--text);flex:1;}
+.sales-summary{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;margin-bottom:24px;}
+.summary-card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:16px;}
+.summary-card .label{font-size:11px;color:var(--text3);margin-bottom:6px;}
+.summary-card .value{font-size:22px;font-weight:700;color:var(--gold);}
+.annual-chart{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:20px;margin-bottom:20px;}
+.chart-bars{display:flex;align-items:flex-end;gap:4px;height:160px;padding-top:10px;}
+.chart-bar-wrap{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;}
+.chart-bar{width:100%;background:linear-gradient(180deg,var(--gold),#7a5010);border-radius:3px 3px 0 0;min-height:2px;transition:height .5s;}
+.chart-bar-label{font-size:10px;color:var(--text3);}
+.chart-bar-val{font-size:9px;color:var(--gold);}
+
+/* MODAL */
+#modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:1000;display:flex;align-items:center;justify-content:center;}
+.modal-box{background:var(--bg2);border:1px solid var(--border2);border-radius:12px;width:min(520px,92vw);max-height:85vh;overflow-y:auto;padding:24px;}
+.modal-title{font-size:16px;font-weight:700;color:var(--gold);margin-bottom:18px;}
+.modal-footer{display:flex;gap:10px;justify-content:flex-end;margin-top:20px;padding-top:16px;border-top:1px solid var(--border);}
+
+/* RIGHT SIDEBAR */
+#right-sb{position:fixed;right:0;top:0;bottom:0;width:320px;background:var(--bg2);border-left:1px solid var(--border);z-index:200;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .25s;}
+#right-sb.open{transform:translateX(0);}
+.rsb-header{padding:18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;}
+.rsb-title{font-size:15px;font-weight:700;flex:1;}
+.rsb-close{background:none;color:var(--text3);font-size:20px;}
+.rsb-close:hover{color:var(--text);}
+.rsb-body{padding:18px;flex:1;overflow-y:auto;}
+.rsb-field{margin-bottom:16px;}
+.rsb-field label{font-size:11px;color:var(--text3);margin-bottom:4px;}
+.rsb-jump-btn{display:flex;align-items:center;gap:8px;padding:10px 14px;border-radius:8px;background:var(--bg3);border:1px solid var(--border);color:var(--gold);font-size:13px;width:100%;margin-bottom:14px;transition:all .2s;}
+.rsb-jump-btn:hover{border-color:var(--gold);}
+
+/* SCROLLBAR */
+::-webkit-scrollbar{width:5px;height:5px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px;}
+::-webkit-scrollbar-thumb:hover{background:var(--text3);}
+
+/* MOBILE */
+@media(max-width:768px){
+  #topbar{display:flex;}
+  #sidebar{position:fixed;left:0;top:0;bottom:0;z-index:300;transform:translateX(-100%);transition:transform .25s;}
+  #sidebar.mobile-open{transform:translateX(0);}
+  #sidebar.collapsed{transform:translateX(-100%);}
+  .sidebar-expand-btn{display:none;}
+  .form-row{grid-template-columns:1fr;}
+  .type-select-grid{grid-template-columns:1fr;}
+  .proj-grid{grid-template-columns:1fr;}
+  .page-content{padding:14px 16px;}
+  .page-header{padding:14px 16px 0;}
+  #right-sb{width:100%;}
+}
+@media(min-width:769px){
+  #topbar{display:none!important;}
+}
+
+/* MISC */
+.flex{display:flex;} .items-center{align-items:center;} .gap-8{gap:8px;} .gap-12{gap:12px;}
+.mt-8{margin-top:8px;} .mt-12{margin-top:12px;} .mt-16{margin-top:16px;} .mt-20{margin-top:20px;}
+.mb-8{margin-bottom:8px;} .mb-12{margin-bottom:12px;} .mb-16{margin-bottom:16px;}
+.text-gold{color:var(--gold);} .text-muted{color:var(--text3);}
+.font-bold{font-weight:700;} .text-sm{font-size:12px;} .text-xs{font-size:11px;}
+.w-full{width:100%;} .justify-between{justify-content:space-between;} .flex-1{flex:1;}
+.tooltip{position:relative;}
+.empty-state{text-align:center;padding:40px 20px;color:var(--text3);}
+.empty-state .empty-icon{font-size:40px;margin-bottom:12px;}
+.empty-state p{font-size:13px;line-height:1.7;}
+.sale-type-badge{font-size:10px;padding:2px 6px;border-radius:3px;background:var(--bg3);color:var(--text2);}
+.received-badge{background:#0a2a0a;color:var(--green);}
+.pending-badge{background:#2a1a00;color:var(--orange);}
+.spot-type-tag{background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:3px 8px;font-size:11px;color:var(--text2);}
+.page-actions{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;}
+</style>
+</head>
+<body>
+
+<!-- 暗号化パスワード再入力モーダル -->
+<div id="enc-pw-overlay" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center;">
+  <div class="setup-card" style="max-width:400px;">
+    <h2 style="font-size:16px;margin-bottom:12px;">🔐 暗号化パスワードを入力</h2>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:16px;">クラウドデータが暗号化されています。パスワードを入力して復号してください。</p>
+    <div class="form-field">
+      <label>暗号化パスワード</label>
+      <input id="enc-pw-input" type="password" placeholder="パスワードを入力..." onkeydown="if(event.key==='Enter')submitEncPw()">
+    </div>
+    <div id="enc-pw-error" style="color:var(--red);font-size:12px;min-height:16px;margin-bottom:8px;"></div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      <button class="btn btn-gold" onclick="submitEncPw()">復号して開始</button>
+      <button class="btn btn-outline" onclick="startWithoutDecrypt()">暗号化なしで続行</button>
+    </div>
+    <div style="margin-top:16px;border-top:1px solid var(--border);padding-top:12px;">
+      <div style="font-size:12px;color:var(--text3);margin-bottom:8px;">パスワードを忘れた場合</div>
+      <div style="font-size:13px;margin-bottom:6px;">${RECOVERY_Q}</div>
+      <div style="display:flex;gap:8px;">
+        <input id="enc-recovery-input" type="password" placeholder="秘密の質問の答え..." style="flex:1;">
+        <button class="btn btn-outline btn-sm" onclick="(async()=>{
+          const a=document.getElementById('enc-recovery-input').value.trim();
+          if(!a){document.getElementById('enc-pw-error').textContent='答えを入力してください';return;}
+          const data=await recoverFromSecret(a);
+          if(!data){document.getElementById('enc-pw-error').textContent='答えが違います';return;}
+          jbKey=data.apiKey||jbKey;
+          jbBinId=data.binId||jbBinId;
+          encPassword=data.encPw||'';
+          recoveryAnswer=a;
+          localStorage.setItem('fujino_jb_key',jbKey);
+          localStorage.setItem('fujino_jb_bin',jbBinId);
+          document.getElementById('enc-pw-overlay').classList.add('hidden');
+          finishStartApp();
+        })()">回復</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- JSONBin Setup -->
+<div id="setup-overlay">
+  <div class="setup-card">
+    <h1>⚖ 藤野晃司完全管理システム</h1>
+    <p>クラウド同期のため <strong>JSONBin.io</strong> の設定が必要です（完全無料）。<br><br>
+      <strong>手順：</strong><br>
+      ① <a href="https://jsonbin.io/" target="_blank">jsonbin.io</a> にアクセスしてアカウント作成<br>
+      ② ログイン後、右上メニュー → <strong>API Keys</strong><br>
+      ③ 「Secret Access Key」をコピーして下に貼り付け
+    </p>
+    <div class="form-field">
+      <label>Secret Access Key</label>
+      <input id="jb-key" placeholder="$2a$10$..." type="password">
+    </div>
+    <div class="form-field" style="margin-top:12px;">
+      <label>暗号化パスワード <span style="font-size:11px;color:var(--text3);">（推奨・任意）</span></label>
+      <input id="jb-enc-pw" placeholder="JSONBinに送るデータを暗号化するパスワード" type="password">
+      <p class="hint" style="margin-top:4px;">設定するとクラウドに保存されるデータがAES-256で暗号化されます。忘れると復号できないため注意。</p>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:8px;">
+      <button class="btn btn-gold" onclick="submitJSONBinConfig()">設定して開始</button>
+      <button class="btn btn-outline" onclick="startWithoutCloud()">このPCのみで使用</button>
+    </div>
+    <p class="hint">※ 設定は後から変更できます。「このPCのみ」を選んだ場合、データはこのブラウザのみに保存されます。</p>
+  </div>
+</div>
+
+<!-- App -->
+<div id="app" class="hidden">
+  <!-- Mobile topbar -->
+  <div id="topbar">
+    <button class="menu-btn" onclick="toggleMobileSidebar()">☰</button>
+    <span class="topbar-title">藤野晃司完全管理システム</span>
+  </div>
+
+  <!-- Sidebar -->
+  <aside id="sidebar">
+    <div class="sidebar-inner">
+      <div class="sidebar-header">
+        <div class="sidebar-title">藤野晃司<br>完全管理システム</div>
+        <div class="sidebar-subtitle">Lawyer Management <span id="sync-badge" style="font-size:10px;margin-left:4px;"></span></div>
+        <div style="margin-top:6px;">
+          <button class="btn btn-outline btn-sm" style="font-size:10px;padding:3px 8px;" onclick="openApiKeyModal()">⚙ API設定確認</button>
+        </div>
+        <button class="collapse-btn" onclick="toggleSidebar()" title="サイドバーを閉じる">◁</button>
+      </div>
+      <div class="sidebar-nav">
+        <button class="nav-btn" data-page="tasklist" onclick="navigate('tasklist')">
+          <span class="icon">✓</span>タスクリスト
+        </button>
+        <button class="nav-btn" data-page="dashboard" onclick="navigate('dashboard')">
+          <span class="icon">⊞</span>ダッシュボード
+        </button>
+        <button class="nav-btn 立件-btn" onclick="navigate('newproject')">
+          <span class="icon">＋</span>立 件
+        </button>
+        <button class="nav-btn" data-page="projectlist" onclick="navigate('projectlist')">
+          <span class="icon">◈</span>プロジェクト一覧
+        </button>
+        <button class="nav-btn" data-page="salesmonthly" onclick="navigate('salesmonthly')">
+          <span class="icon">¥</span>売上（月間）
+        </button>
+        <button class="nav-btn" data-page="salesannual" onclick="navigate('salesannual')">
+          <span class="icon">↗</span>売上（年間）
+        </button>
+        <button class="nav-btn" data-page="unpaid" onclick="navigate('unpaid')">
+          <span class="icon">⚠</span>未収金
+        </button>
+      </div>
+      <div class="sidebar-search" style="padding:8px 8px 4px;">
+        <span class="s-icon">🔍</span>
+        <input type="text" placeholder="プロジェクト検索..." id="sb-search" oninput="onSidebarSearch(this.value)">
+      </div>
+      <div id="sidebar-projects" class="sidebar-projects">
+        <!-- rendered by renderSidebar() -->
+      </div>
+    </div>
+  </aside>
+
+  <button class="sidebar-expand-btn hidden" id="expand-btn" onclick="toggleSidebar()" title="サイドバーを開く">▷</button>
+
+  <!-- Main -->
+  <div id="main">
+    <div id="topbar-placeholder"></div>
+    <div id="page-root"></div>
+  </div>
+
+  <!-- Right sidebar -->
+  <div id="right-sb">
+    <div class="rsb-header">
+      <div class="rsb-title" id="rsb-title">タスク詳細</div>
+      <button class="rsb-close" onclick="closeRightSidebar()">✕</button>
+    </div>
+    <div class="rsb-body" id="rsb-body"></div>
+  </div>
+</div>
+
+<!-- Modal -->
+<div id="modal-overlay" class="hidden" onclick="closeModalOnOverlay(event)">
+  <div class="modal-box" id="modal-box"></div>
+</div>
+
+<script>
+// ============================================================
+// STATE
+// ============================================================
+const STATE_KEY = 'fujino_v2';
+let db = null;
+let state = {
+  projects: {},   // id -> project
+  tasks: {},      // id -> task
+  sales: {},      // id -> sale
+  timeEntries:{}, // id -> entry
+  taskOrder: {},  // tabKey -> [taskId, ...]
+  settings: { sidebarOpen: true },
+  activeTimer: null, // { projectId, startTime }
+};
+let currentPage = 'dashboard';
+let currentProjectId = null;
+let currentTaskTab = 'today';
+let rightSbTaskId = null;
+let calWeekOffset = 0;
+let salesMonth = { y: new Date().getFullYear(), m: new Date().getMonth() };
+let salesYear = new Date().getFullYear();
+let sortables = [];
+let timerInterval = null;
+let saveTimeout = null;
+let projListSearch = '';
+let showClosedProjects = false;
+let sidebarSearch = '';
+
+// ============================================================
+// PERSISTENCE & JSONBIN.IO SYNC
+// ============================================================
+const JB_KEY_STORE = 'fujino_jb_key';
+const JB_BIN_STORE = 'fujino_jb_bin';
+const JB_ENC_FLAG = 'fujino_enc_enabled'; // '1' if encryption is active
+const RECOVERY_STORE = 'fujino_recovery';  // encrypted recovery blob
+const RECOVERY_Q = '母方の祖父の苗字（漢字）は？';
+const JB_BASE = 'https://api.jsonbin.io/v3';
+let jbKey = '';
+let jbBinId = '';
+let encPassword = ''; // in-memory only, not persisted
+let recoveryAnswer = ''; // in-memory only
+
+// ============================================================
+// CRYPTO HELPERS (AES-256-GCM + PBKDF2)
+// ============================================================
+async function cryptoDeriveKey(password, salt) {
+  const enc = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt, iterations: 200000, hash: 'SHA-256' },
+    keyMaterial,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt']
+  );
+}
+function hexToBytes(hex) { return new Uint8Array(hex.match(/.{2}/g).map(h => parseInt(h, 16))); }
+function bytesToHex(buf) { return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join(''); }
+async function encryptPayload(obj, password) {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv   = crypto.getRandomValues(new Uint8Array(12));
+  const key  = await cryptoDeriveKey(password, salt);
+  const plain = new TextEncoder().encode(JSON.stringify(obj));
+  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, plain);
+  return { _enc: 1, salt: bytesToHex(salt), iv: bytesToHex(iv), ct: btoa(String.fromCharCode(...new Uint8Array(ct))) };
+}
+// 秘密の質問による回復データ保存
+async function saveRecoveryData() {
+  if (!recoveryAnswer) return;
+  const data = { apiKey: jbKey, encPw: encPassword, binId: jbBinId };
+  const blob = await encryptPayload(data, recoveryAnswer);
+  localStorage.setItem(RECOVERY_STORE, JSON.stringify(blob));
+}
+// 秘密の質問による回復
+async function recoverFromSecret(answer) {
+  const stored = localStorage.getItem(RECOVERY_STORE);
+  if (!stored) return null;
+  try {
+    return await decryptPayload(JSON.parse(stored), answer);
+  } catch(e) { return null; }
+}
+async function decryptPayload(obj, password) {
+  if (!obj._enc) return obj; // plain text (legacy / no encryption)
+  const salt = hexToBytes(obj.salt);
+  const iv   = hexToBytes(obj.iv);
+  const key  = await cryptoDeriveKey(password, salt);
+  const ctBytes = Uint8Array.from(atob(obj.ct), c => c.charCodeAt(0));
+  const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ctBytes);
+  return JSON.parse(new TextDecoder().decode(plain));
+}
+
+function saveLocal() {
+  localStorage.setItem(STATE_KEY, JSON.stringify(state));
+}
+function loadLocal() {
+  try {
+    const d = localStorage.getItem(STATE_KEY);
+    if (d) { const p = JSON.parse(d); Object.assign(state, p); }
+  } catch(e) {}
+}
+function scheduleSave() {
+  saveLocal();
+  if (jbKey && jbKey !== 'none') {
+    clearTimeout(saveTimeout);
+    saveTimeout = setTimeout(syncToJSONBin, 1000);
+  }
+}
+async function syncToJSONBin() {
+  if (!jbKey || jbKey === 'none') return;
+  const raw = {
+    projects: state.projects, tasks: state.tasks, sales: state.sales,
+    timeEntries: state.timeEntries, taskOrder: state.taskOrder,
+    settings: state.settings, activeTimer: state.activeTimer,
+    updatedAt: new Date().toISOString()
+  };
+  try {
+    // 暗号化パスワードが設定されていれば暗号化
+    const payload = encPassword ? await encryptPayload(raw, encPassword) : raw;
+    if (encPassword) localStorage.setItem(JB_ENC_FLAG, '1');
+    if (jbBinId) {
+      await fetch(`${JB_BASE}/b/${jbBinId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'X-Access-Key': jbKey },
+        body: JSON.stringify(payload)
+      });
+    } else {
+      const res = await fetch(`${JB_BASE}/b`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Access-Key': jbKey,
+          'X-Bin-Name': '藤野晃司管理システム',
+          'X-Bin-Private': 'true'
+        },
+        body: JSON.stringify(payload)
+      });
+      const json = await res.json();
+      if (json.metadata?.id) {
+        jbBinId = json.metadata.id;
+        localStorage.setItem(JB_BIN_STORE, jbBinId);
+      }
+    }
+    showSyncBadge('✓ 同期済み', false);
+  } catch(e) { showSyncBadge('⚠ 同期失敗', true); }
+}
+async function loadFromJSONBin() {
+  if (!jbKey || jbKey === 'none' || !jbBinId) return false;
+  try {
+    const res = await fetch(`${JB_BASE}/b/${jbBinId}/latest`, {
+      headers: { 'X-Access-Key': jbKey }
+    });
+    const json = await res.json();
+    let d = json.record;
+    if (d) {
+      if (d._enc) {
+        // 暗号化データ
+        if (!encPassword) return 'encrypted'; // パスワード未入力を呼び出し元に通知
+        try {
+          d = await decryptPayload(d, encPassword);
+        } catch(e) {
+          return 'wrong_password';
+        }
+      }
+      state.projects    = d.projects    || {};
+      state.tasks       = d.tasks       || {};
+      state.sales       = d.sales       || {};
+      state.timeEntries = d.timeEntries || {};
+      state.taskOrder   = d.taskOrder   || {};
+      state.settings    = d.settings    || { sidebarOpen: true };
+      state.activeTimer = d.activeTimer || null;
+      saveLocal();
+      return true;
+    }
+  } catch(e) { console.warn('JSONBin load error:', e); }
+  return false;
+}
+function openApiKeyModal() {
+  const key = localStorage.getItem('fujino_jb_key') || '（未設定）';
+  const binId = localStorage.getItem('fujino_jb_bin') || '（未設定）';
+  const encEnabled = localStorage.getItem('fujino_enc_enabled') === '1';
+  const encPwStatus = encEnabled
+    ? (encPassword ? `設定済み（セッション中）` : `設定済み（要再入力）`)
+    : '未設定';
+  openModal(`
+    <div class="modal-title">⚙ API・暗号化設定</div>
+    <div class="form-field">
+      <label>JSONBin Secret Access Key</label>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <input id="apikey-display" type="password" value="${escHtml(key)}" readonly style="flex:1;font-family:monospace;font-size:12px;">
+        <button class="btn btn-outline btn-sm" onclick="
+          const inp=document.getElementById('apikey-display');
+          inp.type=inp.type==='password'?'text':'password';
+          this.textContent=inp.type==='password'?'表示':'隠す';
+        ">表示</button>
+      </div>
+    </div>
+    <div class="form-field">
+      <label>Bin ID <span style="font-size:10px;color:var(--text3);">（初回同期時に自動設定）</span></label>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <input id="binid-input" type="text" value="${escHtml(binId === '（未設定）' ? '' : binId)}" placeholder="空欄=自動作成" style="font-family:monospace;font-size:12px;flex:1;">
+        <button class="btn btn-outline btn-sm" onclick="(()=>{
+          const v=document.getElementById('binid-input').value.trim();
+          if(v){jbBinId=v;localStorage.setItem('fujino_jb_bin',v);alert('Bin IDを設定しました。');}
+          else{jbBinId='';localStorage.removeItem('fujino_jb_bin');alert('Bin IDをクリアしました。次回同期時に新規作成されます。');}
+        })()">保存</button>
+      </div>
+      <div style="font-size:11px;color:var(--text3);margin-top:4px;">他のデバイスで同じデータを使う場合はこのIDを入力してください</div>
+    </div>
+    <div class="form-field">
+      <label>暗号化パスワード</label>
+      <div style="font-size:13px;color:var(--text2);margin-bottom:6px;">${encPwStatus}</div>
+      <input id="reenter-pw" type="password" placeholder="${encEnabled ? '新しいパスワード（変更する場合）' : '暗号化パスワードを設定...'}">
+      <button class="btn btn-sm btn-gold" style="margin-top:6px;" onclick="
+        const pw=document.getElementById('reenter-pw').value.trim();
+        if(!pw){alert('パスワードを入力してください');return;}
+        encPassword=pw;
+        localStorage.setItem('fujino_enc_enabled','1');
+        closeModal();
+        scheduleSave();
+        alert('暗号化パスワードを設定しました。次回のクラウド同期から暗号化されます。');
+      ">${encEnabled ? 'パスワード変更' : '暗号化を有効にする'}</button>
+      ${encEnabled ? `<button class="btn btn-sm btn-outline" style="margin-top:6px;margin-left:6px;color:var(--red);" onclick="
+        if(confirm('暗号化を無効にしますか？次回同期から平文で保存されます。')){
+          encPassword='';
+          localStorage.removeItem('fujino_enc_enabled');
+          closeModal();
+          scheduleSave();
+        }
+      ">暗号化を無効にする</button>` : ''}
+    </div>
+    <div class="form-field" style="border-top:1px solid var(--border);margin-top:8px;padding-top:12px;">
+      <label>🔑 秘密の質問（回復用）</label>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:6px;">${RECOVERY_Q}</div>
+      <div style="font-size:12px;color:${localStorage.getItem(RECOVERY_STORE)?'var(--green)':'var(--text3)'};margin-bottom:8px;">
+        ${localStorage.getItem(RECOVERY_STORE) ? '✅ 回復データ設定済み' : '未設定（忘れた時のために設定推奨）'}
+      </div>
+      <input id="recovery-answer-input" type="password" placeholder="秘密の質問の答えを入力...">
+      <button class="btn btn-sm btn-outline" style="margin-top:6px;" onclick="(async()=>{
+        const a=document.getElementById('recovery-answer-input').value.trim();
+        if(!a){alert('答えを入力してください');return;}
+        recoveryAnswer=a;
+        await saveRecoveryData();
+        alert('回復データを保存しました。');
+        openApiKeyModal();
+      })()">回復データを保存</button>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal()">閉じる</button>
+      <button class="btn btn-danger btn-sm" onclick="if(confirm('API設定をリセットして再設定画面に戻しますか？')){localStorage.removeItem('fujino_jb_key');localStorage.removeItem('fujino_jb_bin');localStorage.removeItem('fujino_enc_enabled');location.reload();}">設定リセット</button>
+    </div>
+  `);
+}
+function showSyncBadge(msg, isError) {
+  const el = document.getElementById('sync-badge');
+  if (!el) return;
+  el.textContent = msg;
+  el.style.color = isError ? 'var(--red)' : 'var(--green)';
+  clearTimeout(el._t);
+  el._t = setTimeout(() => { el.textContent = ''; }, 3000);
+}
+
+function submitJSONBinConfig() {
+  const key = (document.getElementById('jb-key')?.value || '').trim();
+  if (!key) { alert('Secret Access Keyを入力してください'); return; }
+  jbKey = key;
+  localStorage.setItem(JB_KEY_STORE, key);
+  const pw = (document.getElementById('jb-enc-pw')?.value || '').trim();
+  if (pw) {
+    encPassword = pw;
+    localStorage.setItem(JB_ENC_FLAG, '1');
+  }
+  startApp();
+}
+function startWithoutCloud() {
+  jbKey = 'none';
+  localStorage.setItem(JB_KEY_STORE, 'none');
+  startApp();
+}
+// 暗号化パスワード再入力モーダル
+function showEncPwOverlay() {
+  document.getElementById('enc-pw-overlay').classList.remove('hidden');
+  document.getElementById('enc-pw-input').value = '';
+  document.getElementById('enc-pw-error').textContent = '';
+  setTimeout(() => document.getElementById('enc-pw-input')?.focus(), 100);
+}
+async function submitEncPw() {
+  const pw = (document.getElementById('enc-pw-input')?.value || '').trim();
+  if (!pw) { document.getElementById('enc-pw-error').textContent = 'パスワードを入力してください'; return; }
+  encPassword = pw;
+  const result = await loadFromJSONBin();
+  if (result === 'wrong_password') {
+    encPassword = '';
+    document.getElementById('enc-pw-error').textContent = 'パスワードが違います。再度入力してください。';
+    return;
+  }
+  document.getElementById('enc-pw-overlay').classList.add('hidden');
+  finishStartApp();
+}
+function startWithoutDecrypt() {
+  // パスワードなしで続行（クラウドは読まずローカルのみ）
+  encPassword = '';
+  document.getElementById('enc-pw-overlay').classList.add('hidden');
+  finishStartApp();
+}
+async function startApp() {
+  document.getElementById('setup-overlay').classList.add('hidden');
+  document.getElementById('app').classList.remove('hidden');
+  loadLocal();
+  if (jbKey && jbKey !== 'none') {
+    if (jbBinId) {
+      const result = await loadFromJSONBin();
+      if (result === 'encrypted') {
+        // パスワード未入力だが暗号化データあり → 再入力モーダル表示
+        showEncPwOverlay();
+        return; // finishStartApp は submitEncPw で呼ばれる
+      }
+    } else {
+      // 初回: ローカルデータをクラウドに保存
+      await syncToJSONBin();
+    }
+  }
+  finishStartApp();
+}
+function finishStartApp() {
+  checkRecurringTasks();
+  // 既存の顧問プロジェクトで受任経緯未設定のものは「自分」にセット
+  Object.values(state.projects).forEach(p => {
+    if (p.type === 'komonor' && !p.acceptanceBackground) p.acceptanceBackground = '自分';
+  });
+  // スポット案件: 完了済みで受取予定日が完了月末日でないものを自動補正
+  Object.values(state.projects).forEach(p => {
+    if (p.type !== 'spot' || !p.closedAt) return;
+    const d = new Date(p.closedAt);
+    const eom = lastDayOfMonth(d.getFullYear(), d.getMonth());
+    Object.values(state.sales).forEach(s => {
+      if (s.projectId === p.id && !s.manuallyEdited && s.expectedDate !== eom) {
+        s.expectedDate = eom;
+      }
+    });
+  });
+  // 全顧問プロジェクトの顧問料売上を最新化（月末日・金額を正しく更新）
+  Object.values(state.projects).forEach(p => {
+    if (p.type === 'komonor') autoGenerateKomonorSales(p.id);
+  });
+  scheduleSave();
+  if (state.activeTimer) startTimerDisplay();
+  renderSidebar();
+  navigate('dashboard');
+}
+
+// ============================================================
+// UTILS
+// ============================================================
+function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+function fmtDate(d) {
+  if (!d) return '—';
+  const dt = new Date(d);
+  if (isNaN(dt)) return d;
+  return `${dt.getFullYear()}/${String(dt.getMonth()+1).padStart(2,'0')}/${String(dt.getDate()).padStart(2,'0')}`;
+}
+function fmtMoney(n) {
+  if (!n && n !== 0) return '—';
+  return '¥' + Number(n).toLocaleString();
+}
+function todayStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function addDays(dateStr, n) {
+  const d = new Date(dateStr);
+  d.setDate(d.getDate() + n);
+  return d.toISOString().slice(0,10);
+}
+function dueStatus(dueDate) {
+  if (!dueDate) return 'future';
+  const today = todayStr();
+  if (dueDate < today) return 'past';
+  if (dueDate === today) return 'today';
+  return 'future';
+}
+function dueBadgeHtml(dueDate) {
+  if (!dueDate) return '';
+  const s = dueStatus(dueDate);
+  const cls = s === 'past' ? 'due-past-badge' : s === 'today' ? 'due-today-badge' : 'due-future-badge';
+  const label = s === 'past' ? '期限超過' : s === 'today' ? '本日期限' : fmtDate(dueDate) + 'まで';
+  return `<span class="task-due-badge ${cls}">${label}</span>`;
+}
+function getLastBizDay(year, month) {
+  let d = new Date(year, month + 1, 0);
+  while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() - 1);
+  return d.toISOString().slice(0,10);
+}
+function lastDayOfMonth(year, month) {
+  // month は 0-indexed
+  return new Date(year, month + 1, 0).toISOString().slice(0, 10);
+}
+function escHtml(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function projectName(id) {
+  const p = state.projects[id];
+  return p ? (p.name || '(無題)') : '(削除済み)';
+}
+// 時間計算ユーティリティ
+function entryMinutes(e) {
+  const [sh, sm] = (e.startTime||'00:00').split(':').map(Number);
+  const [eh, em] = (e.endTime||'00:00').split(':').map(Number);
+  const diff = (eh * 60 + em) - (sh * 60 + sm);
+  return diff > 0 ? diff : 0;
+}
+// projectId: null=全プロジェクト、filterFn: e => bool
+function calcHours(projectId, filterFn) {
+  let mins = 0;
+  Object.values(state.timeEntries).forEach(e => {
+    if (projectId && e.projectId !== projectId) return;
+    if (filterFn && !filterFn(e)) return;
+    mins += entryMinutes(e);
+  });
+  return mins / 60;
+}
+// 編集モーダル用受任経緯ラジオ切替
+function epToggleBg(radio) {
+  const wrap = document.getElementById('ep-bg-wrap');
+  if (!wrap) return;
+  const isOther = radio.value === 'other';
+  wrap.style.display = isOther ? '' : 'none';
+}
+// 受任経緯ラジオ切替（スポット用）
+function toggleBgInput(radio) {
+  const inp = document.getElementById('np-background');
+  const ratioWrap = document.getElementById('np-ratio-wrap');
+  if (!inp) return;
+  const v = radio.value;
+  const isOther = v === 'other';
+  inp.style.display = isOther ? '' : 'none';
+  if (!isOther) inp.value = '';
+  if (ratioWrap) ratioWrap.style.display = isOther ? '' : 'none';
+}
+// 受任経緯ラジオ切替（顧問用）
+function toggleKomonorBgInput(radio, prefix) {
+  const ratioWrap = document.getElementById(prefix + '-komonor-ratio-wrap');
+  if (!ratioWrap) return;
+  ratioWrap.style.display = radio.value === 'other' ? '' : 'none';
+}
+// 売上計上率（スポット・顧問共通）
+function getSaleMultiplier(sale) {
+  const p = state.projects[sale.projectId];
+  if (!p) return 1;
+  const bg = p.acceptanceBackground || '';
+  if (p.type === 'spot') {
+    if (bg === 'LawRoom') return 0.7;
+    if (bg === '他弁護士') return 0.4;
+    if (bg === '自分') return 1.0;
+    // その他: カスタム割合
+    const ratio = Number(p.acceptanceRatio);
+    return (!isNaN(ratio) && ratio > 0) ? ratio / 100 : 1.0;
+  }
+  if (p.type === 'komonor') {
+    if (bg === '他弁護士') return 0.4;
+    if (bg === '自分' || bg === '') return 1.0;
+    // その他: カスタム割合
+    const ratio = Number(p.acceptanceRatio);
+    return (!isNaN(ratio) && ratio > 0) ? ratio / 100 : 1.0;
+  }
+  return 1;
+}
+// 売上計上可否（スポット未完了は計上しない）
+function isSaleCountable(sale) {
+  const p = state.projects[sale.projectId];
+  if (!p) return false;
+  if (p.type === 'spot' && !p.closedAt) return false; // 未完了スポットは除外
+  return true;
+}
+// 自己案件判定（スポット自分 or 顧問自分）
+function isSelfSale(sale) {
+  const p = state.projects[sale.projectId];
+  if (!p) return false;
+  const bg = p.acceptanceBackground || '';
+  if (p.type === 'spot') return bg === '自分';
+  if (p.type === 'komonor') return bg === '自分' || bg === '';
+  return false;
+}
+function fmtHours(h) {
+  if (!h) return '0h 0m';
+  const hh = Math.floor(h);
+  const mm = Math.round((h - hh) * 60);
+  return mm > 0 ? `${hh}h ${mm}m` : `${hh}h`;
+}
+function hourlyRate(fee, hours) {
+  if (!hours || !fee) return null;
+  return Math.round(fee / hours);
+}
+function komonorTimeStats(projectId) {
+  const today = new Date();
+  const y = today.getFullYear(), m = today.getMonth();
+  const curYM = `${y}-${String(m+1).padStart(2,'0')}`;
+  const curY  = String(y);
+
+  const monthFilter = e => (e.date||'').startsWith(curYM);
+  const yearFilter  = e => (e.date||'').startsWith(curY);
+
+  const hoursMonth = calcHours(projectId, monthFilter);
+  const hoursYear  = calcHours(projectId, yearFilter);
+  const hoursAll   = calcHours(projectId, null);
+
+  // 対応する顧問料
+  const projSales = Object.values(state.sales).filter(s => s.projectId === projectId && s.saleType === '顧問料');
+  const feeMonth = projSales.filter(s => (s.expectedDate||'').startsWith(curYM))
+                            .reduce((s,x) => s + (Number(x.amount)||0), 0);
+  const feeYear  = projSales.filter(s => (s.expectedDate||'').startsWith(curY))
+                            .reduce((s,x) => s + (Number(x.amount)||0), 0);
+  const feeAll   = projSales.reduce((s,x) => s + (Number(x.amount)||0), 0);
+
+  return { hoursMonth, hoursYear, hoursAll, feeMonth, feeYear, feeAll };
+}
+function timeStatsHtml(label, hours, fee) {
+  const rate = hourlyRate(fee, hours);
+  return `<div class="info-item">
+    <label>${label}</label>
+    <div class="value" style="font-size:13px;">
+      ${fmtHours(hours)}
+      ${fee ? `<span style="color:var(--text3);font-size:11px;margin-left:6px;">/ ${fmtMoney(fee)}</span>` : ''}
+      ${rate ? `<span style="color:var(--gold);font-size:12px;margin-left:6px;">→ ${fmtMoney(rate)}/h</span>` : '<span style="color:var(--text3);font-size:11px;margin-left:6px;">単価算出不可</span>'}
+    </div>
+  </div>`;
+}
+// 指定年月の顧問料を取得（履歴対応）
+function getFeeForMonth(project, year, month) {
+  const history = project.feeHistory;
+  if (!history || !history.length) return project.monthlyFee || 0;
+  // 月レベルで比較（"YYYY-MM"）することで契約当月から正しく反映
+  const targetYM = `${year}-${String(month+1).padStart(2,'0')}`;
+  let fee = 0;
+  history.forEach(h => {
+    const hYM = (h.startDate || '').slice(0, 7);
+    if (hYM <= targetYM) fee = h.amount;
+  });
+  return fee;
+}
+// 顧問料の売上を自動生成（過去分 + 今月）
+function autoGenerateKomonorSales(projectId) {
+  const p = state.projects[projectId];
+  if (!p || p.type !== 'komonor') return;
+  // 開始月: contractDate → feeHistory最古 → monthlyFeeがあれば今月
+  let startStr = p.contractDate;
+  if (!startStr && p.feeHistory && p.feeHistory.length) {
+    const sorted = [...p.feeHistory].sort((a,b) => (a.startDate||'').localeCompare(b.startDate||''));
+    startStr = sorted[0].startDate;
+  }
+  if (!startStr && (p.monthlyFee > 0)) {
+    // contractDate未設定でもmonthlyFeeがあれば今月分だけ生成
+    startStr = todayStr().slice(0,7) + '-01';
+  }
+  if (!startStr) return;
+  const start = new Date(startStr);
+  const today = new Date();
+  let y = start.getFullYear(), m = start.getMonth();
+  const endY = today.getFullYear(), endM = today.getMonth();
+  const closedYM = p.closedAt ? p.closedAt.slice(0, 7) : null; // "YYYY-MM" or null
+  while (y < endY || (y === endY && m <= endM)) {
+    const ms = `${y}-${String(m+1).padStart(2,'0')}`;
+    if (closedYM && ms > closedYM) break; // 終了月を超えたら生成しない
+    const rk = `komonor-fee-${projectId}-${ms}`;
+    const eom = lastDayOfMonth(y, m); // 月末日
+    const existing = Object.values(state.sales).find(s => s.recurringKey === rk);
+    // 手動編集済みはスキップ（金額を保持）
+    if (existing && existing.manuallyEdited) { m++; if (m > 11) { m = 0; y++; } continue; }
+    if (!existing) {
+      const fee = getFeeForMonth(p, y, m);
+      if (fee > 0) {
+        const s = { id: genId(), projectId, saleType: '顧問料', amount: fee,
+          expectedDate: eom, received: false, receivedDate: '', recurringKey: rk };
+        state.sales[s.id] = s;
+      }
+    } else {
+      // 既存エントリの金額・受取予定日を更新（手動編集でない場合のみ）
+      const fee = getFeeForMonth(p, y, m);
+      if (fee > 0) existing.amount = fee;
+      existing.expectedDate = eom; // 常に月末日に統一
+    }
+    m++; if (m > 11) { m = 0; y++; }
+  }
+}
+
+// ============================================================
+// RECURRING TASKS
+// ============================================================
+function checkRecurringTasks() {
+  const today = new Date();
+  const y = today.getFullYear();
+  const m = today.getMonth();
+
+  // 経費・交通費精算プロジェクトへの月次タスク自動追加
+  const expProj = Object.values(state.projects).find(p =>
+    p.name && p.name.includes('経費') && p.name.includes('精算')
+  );
+  if (expProj) {
+    const expKey = `monthly-expense-${y}-${m+1}`;
+    const hasExpense = Object.values(state.tasks).some(t => t.recurringKey === expKey);
+    if (!hasExpense) {
+      const eom = lastDayOfMonth(y, m);
+      const t = {
+        id: genId(), projectId: expProj.id, name: `${m+1}月経費精算`,
+        requestedAt: todayStr(), dueDate: eom, estimatedMinutes: 30,
+        completed: false, completedAt: null, order: 9999,
+        recurringKey: expKey, isRecurring: true
+      };
+      state.tasks[t.id] = t;
+    }
+  }
+
+  // Annual tasks for 顧問 projects: 法人設立日
+  Object.values(state.projects).forEach(p => {
+    if (p.type !== 'komonor' || !p.corporateEstDate) return;
+    const est = new Date(p.corporateEstDate);
+    const annKey = `corp-anniv-${p.id}-${y}`;
+    const has = Object.values(state.tasks).some(t => t.recurringKey === annKey);
+    if (!has) {
+      const dueD = `${y}-${String(est.getMonth()+1).padStart(2,'0')}-${String(est.getDate()).padStart(2,'0')}`;
+      const t = {
+        id: genId(), projectId: p.id,
+        name: `法人設立日（${est.getMonth()+1}月${est.getDate()}日）`,
+        requestedAt: todayStr(), dueDate: dueD, estimatedMinutes: 30,
+        completed: false, completedAt: null, order: 9999,
+        recurringKey: annKey, isRecurring: true
+      };
+      state.tasks[t.id] = t;
+    }
+  });
+  scheduleSave();
+}
+
+// ============================================================
+// NAVIGATION
+// ============================================================
+function navigate(page, projectId) {
+  currentPage = page;
+  currentProjectId = projectId || null;
+  // Update nav highlights
+  document.querySelectorAll('.nav-btn[data-page]').forEach(b => {
+    b.classList.toggle('active', b.dataset.page === page);
+  });
+  // Update sidebar project highlight
+  document.querySelectorAll('.proj-item').forEach(b => {
+    b.classList.toggle('active', b.dataset.id === projectId);
+  });
+  // Close mobile sidebar
+  document.getElementById('sidebar').classList.remove('mobile-open');
+  renderPage();
+}
+function renderPage() {
+  const root = document.getElementById('page-root');
+  if (currentPage === 'dashboard') root.innerHTML = renderDashboard();
+  else if (currentPage === 'tasklist') root.innerHTML = renderTaskList();
+  else if (currentPage === 'newproject') root.innerHTML = renderNewProjectPage();
+  else if (currentPage === 'projectlist') root.innerHTML = renderProjectList();
+  else if (currentPage === 'project') root.innerHTML = renderProjectPage(currentProjectId);
+  else if (currentPage === 'salesmonthly') root.innerHTML = renderSalesMonthly();
+  else if (currentPage === 'salesannual') root.innerHTML = renderSalesAnnual();
+  else if (currentPage === 'unpaid') root.innerHTML = renderUnpaidPage();
+  setupPageEvents();
+}
+
+// ============================================================
+// SIDEBAR
+// ============================================================
+function spotHasNoTasks(p) {
+  return !Object.values(state.tasks).some(t => t.projectId === p.id);
+}
+function renderSidebar() {
+  const q = sidebarSearch.toLowerCase();
+  const all = Object.values(state.projects);
+
+  // 表示対象: 検索なし → 終了済み除外、検索あり → 名前一致なら終了済みも表示
+  const visible = all.filter(p => {
+    if (q) return (p.name||'').toLowerCase().includes(q);
+    return !p.closedAt; // 終了済みはデフォルト非表示
+  });
+
+  // タスク未設定のスポット（アクティブのみ）
+  const noTaskSpot = visible.filter(p =>
+    p.type === 'spot' && !p.closedAt && spotHasNoTasks(p)
+  ).sort((a,b) => (a.name||'').localeCompare(b.name||''));
+
+  const starred = visible.filter(p => p.starred).sort((a,b) => (a.name||'').localeCompare(b.name||''));
+  const others  = visible.filter(p => !p.starred).sort((a,b) => (a.name||'').localeCompare(b.name||''));
+
+  const closedCount = all.filter(p => p.closedAt).length;
+
+  let html = '';
+
+  if (!q && closedCount > 0) {
+    html += `<div style="font-size:10px;color:var(--text3);padding:2px 8px 6px;">終了済み ${closedCount}件（検索で表示）</div>`;
+  }
+
+  if (noTaskSpot.length) {
+    html += `<div class="sidebar-section-title" style="color:#e05555;">⚠ タスク未設定</div>`;
+    noTaskSpot.forEach(p => html += sidebarProjItem(p, true));
+    html += `<hr class="sidebar-divider">`;
+  }
+  if (starred.length) {
+    html += `<div class="sidebar-section-title">★ ピン留め</div>`;
+    starred.forEach(p => html += sidebarProjItem(p));
+    html += `<hr class="sidebar-divider">`;
+  }
+  if (others.length) {
+    if (starred.length || noTaskSpot.length) html += `<div class="sidebar-section-title">プロジェクト</div>`;
+    others.forEach(p => html += sidebarProjItem(p));
+  }
+  if (!visible.length) {
+    html += `<div class="text-muted text-sm" style="padding:12px 8px;">${q ? '一致するプロジェクトなし' : '立件でプロジェクトを作成してください'}</div>`;
+  }
+
+  const el = document.getElementById('sidebar-projects');
+  if (el) el.innerHTML = html;
+}
+function sidebarProjItem(p, noTask) {
+  const typeMap = { komonor:'顧問', spot:'スポット', other:'その他' };
+  const typeClass = { komonor:'badge-komonor', spot:'badge-spot', other:'badge-other' };
+  const isActive = currentPage === 'project' && currentProjectId === p.id;
+  const closedBadge = p.closedAt ? ` <span style="font-size:10px;color:var(--text3);">終了</span>` : '';
+  const nameHtml = noTask
+    ? `<span class="proj-name" style="color:#e05555;">${escHtml(p.name||'(無題)')} <span style="font-size:10px;opacity:.85;">タスク未設定</span></span>`
+    : `<span class="proj-name">${escHtml(p.name||'(無題)')}${closedBadge}</span>`;
+  return `<div class="proj-item ${isActive?'active':''}" data-id="${p.id}" onclick="navigate('project','${p.id}')">
+    <button class="proj-star ${p.starred?'starred':''}" onclick="event.stopPropagation();toggleStar('${p.id}')" title="ピン留め">★</button>
+    ${nameHtml}
+    <span class="proj-type-badge ${typeClass[p.type]||''}">${typeMap[p.type]||''}</span>
+  </div>`;
+}
+function onSidebarSearch(val) {
+  sidebarSearch = val;
+  renderSidebar(); // 入力欄は静的HTMLなので影響なし
+}
+function toggleStar(id) {
+  if (!state.projects[id]) return;
+  state.projects[id].starred = !state.projects[id].starred;
+  scheduleSave();
+  renderSidebar();
+}
+function toggleSidebar() {
+  const sb = document.getElementById('sidebar');
+  const btn = document.getElementById('expand-btn');
+  sb.classList.toggle('collapsed');
+  state.settings.sidebarOpen = !sb.classList.contains('collapsed');
+  btn.classList.toggle('hidden', !sb.classList.contains('collapsed'));
+  scheduleSave();
+}
+function toggleMobileSidebar() {
+  document.getElementById('sidebar').classList.toggle('mobile-open');
+}
+
+// ============================================================
+// DASHBOARD
+// ============================================================
+function renderDashboard() {
+  const timerActive = !!state.activeTimer;
+  const projOptions = Object.values(state.projects).map(p =>
+    `<option value="${p.id}">${escHtml(p.name||'(無題)')}</option>`
+  ).join('');
+
+  // Build week dates
+  const today = new Date();
+  const weekDays = ['月','火','水','木','金','土','日'];
+  const dayOfWeek = today.getDay() === 0 ? 6 : today.getDay() - 1;
+  const weekStart = new Date(today);
+  weekStart.setDate(today.getDate() - dayOfWeek + calWeekOffset * 7);
+
+  const cols = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(weekStart);
+    d.setDate(weekStart.getDate() + i);
+    cols.push(d);
+  }
+
+  const todayISO = today.toISOString().slice(0,10);
+  let calHeader = `<div class="cal-h-cell"></div>`;
+  cols.forEach((d, i) => {
+    const iso = d.toISOString().slice(0,10);
+    const isToday = iso === todayISO;
+    calHeader += `<div class="cal-h-cell ${isToday?'today':''}">${weekDays[i]}<br>${d.getMonth()+1}/${d.getDate()}</div>`;
+  });
+
+  // Gather entries for this week
+  const weekEntries = Object.values(state.timeEntries).filter(e => {
+    return cols.some(d => d.toISOString().slice(0,10) === e.date);
+  });
+
+  const palette = ['#c9a84c','#4488dd','#52b07a','#e05252','#9952e0','#e09a3a','#52b0b0'];
+  const projColors = {};
+  Object.keys(state.projects).forEach((id, i) => { projColors[id] = palette[i % palette.length]; });
+
+  let calGrid = '';
+  for (let h = 0; h < 24; h++) {
+    cols.forEach((d, ci) => {
+      const iso = d.toISOString().slice(0,10);
+      const slotEntries = weekEntries.filter(e => {
+        if (e.date !== iso) return false;
+        const sh = parseInt((e.startTime||'00:00').split(':')[0]);
+        const eh = parseInt((e.endTime||'00:00').split(':')[0]);
+        return sh <= h && h < eh;
+      });
+      let inside = '';
+      slotEntries.forEach(e => {
+        const col = projColors[e.projectId] || '#888';
+        const pname = escHtml(projectName(e.projectId));
+        inside += `<div class="cal-entry" style="background:${col}22;border-left:3px solid ${col};cursor:pointer;" onclick="event.stopPropagation();openTimeEntryDetailModal('${e.id}')" title="${pname} — クリックで編集/削除">${h===parseInt((e.startTime||'').split(':')[0])?pname:''}</div>`;
+      });
+      calGrid += `<div class="cal-slot" data-date="${iso}" data-hour="${h}" onclick="openTimeEntryModal('${iso}',${h})">${inside}</div>`;
+    });
+  }
+
+  let timeCells = '';
+  for (let h = 0; h < 24; h++) timeCells += `<div class="cal-time-cell">${String(h).padStart(2,'0')}:00</div>`;
+
+  const weekLabel = `${weekStart.getMonth()+1}月${weekStart.getDate()}日 〜 ${cols[6].getMonth()+1}月${cols[6].getDate()}日`;
+
+  return `
+  <div class="page-header"><h1 class="page-title">ダッシュ<span>ボード</span></h1></div>
+  <div class="page-content">
+    <div class="dashboard-timer">
+      <div>
+        <div class="timer-display" id="timer-display">${timerActive ? elapsedStr(state.activeTimer.startTime) : '00:00:00'}</div>
+        <div class="timer-project" id="timer-proj-label">${timerActive ? '計測中: ' + escHtml(projectName(state.activeTimer.projectId)) : '計測中のプロジェクトなし'}</div>
+      </div>
+      ${!timerActive ? `
+        <div style="flex:1;min-width:180px;">
+          <input type="text" id="timer-search" placeholder="🔍 プロジェクト検索..." oninput="filterTimerProjects(this.value)" style="margin-bottom:6px;font-size:12px;padding:6px 10px;">
+          <select class="timer-proj-select" id="timer-proj-sel" style="width:100%;">
+            <option value="">— 選択 —</option>${projOptions}
+          </select>
+        </div>
+        <button class="btn timer-btn timer-start" onclick="startTimer()">▶ 開始</button>
+      ` : `
+        <button class="btn timer-btn timer-stop" onclick="stopTimer()">■ 停止</button>
+      `}
+    </div>
+    <div class="cal-wrap">
+      <div class="cal-week-nav">
+        <button class="btn btn-outline btn-sm" onclick="changeWeek(-1)">◁ 前週</button>
+        <span class="cal-week-label">${weekLabel}</span>
+        <button class="btn btn-outline btn-sm" onclick="changeWeek(1)">次週 ▷</button>
+        <button class="btn btn-outline btn-sm" onclick="changeWeek(-calWeekOffset)">今週</button>
+      </div>
+      <div class="cal-header" style="display:grid;grid-template-columns:50px repeat(7,1fr);">${calHeader}</div>
+      <div class="cal-body">
+        <div class="cal-time-col">${timeCells}</div>
+        <div class="cal-grid" style="display:grid;grid-template-columns:repeat(7,1fr);flex:1;">${calGrid}</div>
+      </div>
+    </div>
+  </div>`;
+}
+function elapsedStr(startTime) {
+  const sec = Math.floor((Date.now() - new Date(startTime).getTime()) / 1000);
+  const h = Math.floor(sec/3600), m = Math.floor((sec%3600)/60), s = sec%60;
+  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+}
+function startTimer() {
+  const sel = document.getElementById('timer-proj-sel');
+  const pid = sel ? sel.value : '';
+  state.activeTimer = { projectId: pid, startTime: new Date().toISOString() };
+  scheduleSave();
+  startTimerDisplay();
+  renderPage();
+}
+function stopTimer() {
+  if (!state.activeTimer) return;
+  const { projectId, startTime } = state.activeTimer;
+  const end = new Date();
+  const start = new Date(startTime);
+  if (projectId) {
+    const entry = {
+      id: genId(), projectId, date: start.toISOString().slice(0,10),
+      startTime: `${String(start.getHours()).padStart(2,'0')}:${String(start.getMinutes()).padStart(2,'0')}`,
+      endTime: `${String(end.getHours()).padStart(2,'0')}:${String(end.getMinutes()).padStart(2,'0')}`,
+    };
+    state.timeEntries[entry.id] = entry;
+  }
+  state.activeTimer = null;
+  clearInterval(timerInterval);
+  timerInterval = null;
+  scheduleSave();
+  renderPage();
+}
+function startTimerDisplay() {
+  clearInterval(timerInterval);
+  timerInterval = setInterval(() => {
+    const el = document.getElementById('timer-display');
+    if (el && state.activeTimer) el.textContent = elapsedStr(state.activeTimer.startTime);
+  }, 1000);
+}
+function changeWeek(n) {
+  calWeekOffset = typeof n === 'number' && n === -calWeekOffset ? 0 : calWeekOffset + n;
+  renderPage();
+}
+function openTimeEntryModal(date, hour) {
+  const projOptions = Object.values(state.projects).map(p =>
+    `<option value="${p.id}">${escHtml(p.name||'(無題)')}</option>`
+  ).join('');
+  const sh = String(hour).padStart(2,'0');
+  const eh = String(Math.min(hour+1,23)).padStart(2,'0');
+  openModal(`
+    <div class="modal-title">時間を記録</div>
+    <div class="form-field"><label>プロジェクト</label><select id="te-proj"><option value="">— 選択 —</option>${projOptions}</select></div>
+    <div class="form-row">
+      <div class="form-field"><label>開始時刻</label><input type="time" id="te-start" value="${sh}:00"></div>
+      <div class="form-field"><label>終了時刻</label><input type="time" id="te-end" value="${eh}:00"></div>
+    </div>
+    <div class="form-field"><label>日付</label><input type="date" id="te-date" value="${date}"></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal()">キャンセル</button>
+      <button class="btn btn-gold" onclick="submitTimeEntry()">記録する</button>
+    </div>
+  `);
+}
+function submitTimeEntry() {
+  const pid = document.getElementById('te-proj').value;
+  const start = document.getElementById('te-start').value;
+  const end = document.getElementById('te-end').value;
+  const date = document.getElementById('te-date').value;
+  if (!start || !end || !date) { alert('日付・時刻を入力してください'); return; }
+  const entry = { id: genId(), projectId: pid, date, startTime: start, endTime: end };
+  state.timeEntries[entry.id] = entry;
+  scheduleSave();
+  closeModal();
+  renderPage();
+}
+
+// ============================================================
+// TASK LIST
+// ============================================================
+function getTasksForTab(tab) {
+  const today = todayStr();
+  const week = addDays(today, 7);
+  const month = addDays(today, 30);
+  let tasks = Object.values(state.tasks).filter(t => !t.completed);
+  if (tab === 'today') tasks = tasks.filter(t => t.dueDate && t.dueDate <= today);
+  else if (tab === 'week') tasks = tasks.filter(t => t.dueDate && t.dueDate <= week);
+  else if (tab === 'month') tasks = tasks.filter(t => t.dueDate && t.dueDate <= month);
+  // 期限の近い順に並べる（期限なしは末尾）
+  tasks.sort((a, b) => {
+    if (!a.dueDate && !b.dueDate) return 0;
+    if (!a.dueDate) return 1;
+    if (!b.dueDate) return -1;
+    return a.dueDate.localeCompare(b.dueDate);
+  });
+  return tasks;
+}
+function renderTaskList() {
+  const tabs = [
+    { key:'today', label:'今日まで' },
+    { key:'week', label:'1週間後まで' },
+    { key:'month', label:'1ヶ月後まで' },
+    { key:'all', label:'全て' },
+  ];
+  const tasks = getTasksForTab(currentTaskTab);
+
+  let tasksHtml = tasks.map(t => taskCardHtml(t, true)).join('');
+  if (!tasks.length) tasksHtml = `<div class="empty-state"><div class="empty-icon">✅</div><p>このタブにタスクはありません</p></div>`;
+
+  return `
+  <div class="page-header"><h1 class="page-title">タスク<span>リスト</span></h1></div>
+  <div class="page-content">
+    <div class="task-tabs">
+      ${tabs.map(tb => `<button class="tab-btn ${currentTaskTab===tb.key?'active':''}" onclick="switchTaskTab('${tb.key}')">${tb.label}</button>`).join('')}
+    </div>
+    <div id="task-list-container">${tasksHtml}</div>
+  </div>`;
+}
+function taskCardHtml(t, showProj) {
+  const p = state.projects[t.projectId];
+  const s = dueStatus(t.dueDate);
+  const pname = t.projectId === '__expense__' ? '経費申請' : (p ? escHtml(p.name) : '');
+  const projLink = t.projectId && t.projectId !== '__expense__' && p
+    ? `<span class="task-proj-link" onclick="event.stopPropagation();navigate('project','${t.projectId}')">${pname}</span>`
+    : `<span class="text-muted">${pname}</span>`;
+  return `
+  <div class="task-card due-${s}" data-task-id="${t.id}" onclick="openRightSidebar('${t.id}')">
+    <button class="task-check" onclick="event.stopPropagation();completeTask('${t.id}')" title="完了にする"></button>
+    <span class="task-drag-handle">⠿</span>
+    <div class="task-info">
+      <div class="task-name">${escHtml(t.name)}</div>
+      <div class="task-meta">
+        ${showProj ? projLink : ''}
+        ${dueBadgeHtml(t.dueDate)}
+        ${t.estimatedMinutes ? `<span class="task-estimate">⏱ ${t.estimatedMinutes}分</span>` : ''}
+        ${t.requestedAt ? `<span class="text-muted text-xs">依頼: ${fmtDate(t.requestedAt)}</span>` : ''}
+      </div>
+    </div>
+  </div>`;
+}
+function switchTaskTab(tab) {
+  currentTaskTab = tab;
+  renderPage();
+  setTimeout(setupSortable, 100);
+}
+function completeTask(id) {
+  if (!state.tasks[id]) return;
+  state.tasks[id].completed = true;
+  state.tasks[id].completedAt = new Date().toISOString();
+  scheduleSave();
+  // Remove card
+  const el = document.querySelector(`[data-task-id="${id}"]`);
+  if (el) { el.style.opacity='0'; el.style.transition='opacity .3s'; setTimeout(() => el.remove(), 300); }
+  closeRightSidebar();
+}
+function setupSortable() {
+  const container = document.getElementById('task-list-container');
+  if (!container || typeof Sortable === 'undefined') return;
+  sortables.forEach(s => { try { s.destroy(); } catch(e){} });
+  sortables = [];
+  const s = Sortable.create(container, {
+    animation: 150,
+    handle: '.task-drag-handle',
+    onEnd: () => {
+      const ids = [...container.querySelectorAll('[data-task-id]')].map(el => el.dataset.taskId);
+      state.taskOrder[`tab_${currentTaskTab}`] = ids;
+      scheduleSave();
+    }
+  });
+  sortables.push(s);
+}
+
+// ============================================================
+// NEW PROJECT (立件)
+// ============================================================
+let newProjStep = 1;
+let newProjType = '';
+let newProjData = {};
+
+function renderNewProjectPage() {
+  if (newProjStep === 1) return renderNewProjStep1();
+  if (newProjStep === 2) return renderNewProjStep2();
+  return renderNewProjStep1();
+}
+function renderNewProjStep1() {
+  return `
+  <div class="page-header"><h1 class="page-title">立 <span>件</span></h1></div>
+  <div class="page-content">
+    <div class="step-indicator">
+      <div class="step active">① 種別選択</div>
+      <div class="step">② 情報入力</div>
+      <div class="step">③ 完了</div>
+    </div>
+    <div class="card" style="max-width:640px;">
+      <div class="card-title">プロジェクト種別を選択</div>
+      <div class="type-select-grid">
+        <div class="type-card ${newProjType==='komonor'?'selected':''}" onclick="selectNewProjType('komonor')">
+          <div class="type-icon">🏢</div>
+          <div class="type-name">顧 問</div>
+          <div class="type-desc">月額顧問料（継続）</div>
+        </div>
+        <div class="type-card ${newProjType==='spot'?'selected':''}" onclick="selectNewProjType('spot')">
+          <div class="type-icon">⚖</div>
+          <div class="type-name">スポット</div>
+          <div class="type-desc">着手金・報酬金案件</div>
+        </div>
+        <div class="type-card ${newProjType==='other'?'selected':''}" onclick="selectNewProjType('other')">
+          <div class="type-icon">📋</div>
+          <div class="type-name">その他</div>
+          <div class="type-desc">社内・営業・採用など</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;">
+        <button class="btn btn-gold" onclick="goNewProjStep2()" ${!newProjType?'disabled':''}>次へ →</button>
+      </div>
+    </div>
+  </div>`;
+}
+function selectNewProjType(t) {
+  newProjType = t;
+  document.querySelectorAll('.type-card').forEach(el => el.classList.remove('selected'));
+  event.currentTarget.classList.add('selected');
+  document.querySelector('[onclick="goNewProjStep2()"]').removeAttribute('disabled');
+}
+function goNewProjStep2() {
+  if (!newProjType) return;
+  newProjStep = 2;
+  renderPage();
+}
+function renderNewProjStep2() {
+  const typeLabel = { komonor:'顧問', spot:'スポット', other:'その他' }[newProjType];
+  let fields = '';
+  if (newProjType === 'komonor') {
+    fields = `
+      <div class="form-row">
+        <div class="form-field"><label>法人名 *</label><input id="np-corpName" placeholder="株式会社○○"></div>
+        <div class="form-field"><label>代表者名</label><input id="np-repName" placeholder="山田 太郎"></div>
+      </div>
+      <div class="form-field"><label>所在地</label><input id="np-address" placeholder="東京都千代田区..."></div>
+      <div class="form-field"><label>業務内容</label><input id="np-business" placeholder="ITサービス業"></div>
+      <div class="form-field"><label>URL</label><input id="np-url" type="url" placeholder="https://"></div>
+      <div class="form-row">
+        <div class="form-field"><label>月額顧問料（円）*</label><input id="np-fee" type="number" placeholder="50000"></div>
+        <div class="form-field"><label>契約日 *</label><input id="np-contractDate" type="date"></div>
+      </div>
+      <div class="form-field"><label>法人設立日</label><input id="np-corpEstDate" type="date"></div>
+      <div class="form-field">
+        <label>受任の経緯</label>
+        <div style="display:flex;gap:16px;flex-wrap:wrap;">
+          <span class="radio-opt" onclick="this.querySelector('input').click()"><input type="radio" name="np-komonor-bgtype" value="自分" checked onchange="toggleKomonorBgInput(this,'np')" onclick="event.stopPropagation()"> 自分 <span style="font-size:10px;color:var(--text3);">(売上×100%)</span></span>
+          <span class="radio-opt" onclick="this.querySelector('input').click()"><input type="radio" name="np-komonor-bgtype" value="他弁護士" onchange="toggleKomonorBgInput(this,'np')" onclick="event.stopPropagation()"> 他弁護士 <span style="font-size:10px;color:var(--text3);">(売上×40%)</span></span>
+          <span class="radio-opt" onclick="this.querySelector('input').click()"><input type="radio" name="np-komonor-bgtype" value="other" onchange="toggleKomonorBgInput(this,'np')" onclick="event.stopPropagation()"> その他</span>
+        </div>
+        <div id="np-komonor-ratio-wrap" style="display:none;margin-top:6px;">
+          <label>売上計上割合 (%)</label><input id="np-komonor-ratio" type="number" min="1" max="100" placeholder="例: 50" style="width:100px;">
+        </div>
+      </div>
+      <div class="form-field"><label>メモ</label><textarea id="np-memo" rows="3" placeholder="備考..."></textarea></div>`;
+  } else if (newProjType === 'spot') {
+    const spotTypes = ['離婚','交通事故','相続','個人債務整理','法人債務整理','貸金','建明','刑事加害者','刑事被害者','労働（法人側）','労働（労働者側）','報酬支払請求'];
+    fields = `
+      <div class="form-row">
+        <div class="form-field"><label>依頼者名 *</label><input id="np-clientName" placeholder="山田 太郎"></div>
+        <div class="form-field"><label>案件種類 *</label>
+          <select id="np-spotType">
+            ${spotTypes.map(t => `<option>${t}</option>`).join('')}
+            <option value="__other__">その他</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-field"><label>相手方名</label><input id="np-opponentName" placeholder="山田 花子"></div>
+      <div class="form-field">
+        <label>受任の経緯</label>
+        <div style="display:flex;gap:14px;margin-bottom:8px;flex-wrap:wrap;">
+          <span class="radio-opt" onclick="this.querySelector('input').click()"><input type="radio" name="np-bgtype" value="自分" checked onchange="toggleBgInput(this)" onclick="event.stopPropagation()"> 自分 <span style="font-size:10px;color:var(--text3);">(売上×100%)</span></span>
+          <span class="radio-opt" onclick="this.querySelector('input').click()"><input type="radio" name="np-bgtype" value="LawRoom" onchange="toggleBgInput(this)" onclick="event.stopPropagation()"> LawRoom <span style="font-size:10px;color:var(--text3);">(売上×70%)</span></span>
+          <span class="radio-opt" onclick="this.querySelector('input').click()"><input type="radio" name="np-bgtype" value="他弁護士" onchange="toggleBgInput(this)" onclick="event.stopPropagation()"> 他弁護士 <span style="font-size:10px;color:var(--text3);">(売上×40%)</span></span>
+          <span class="radio-opt" onclick="this.querySelector('input').click()"><input type="radio" name="np-bgtype" value="other" onchange="toggleBgInput(this)" onclick="event.stopPropagation()"> その他（入力）</span>
+        </div>
+        <div id="np-ratio-wrap" style="display:none;">
+          <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">
+            <input id="np-background" placeholder="具体的な経緯..." style="flex:1;">
+            <span style="display:inline-flex;align-items:center;gap:4px;white-space:nowrap;font-size:12px;color:var(--text2);">計上率 <input id="np-ratio" type="number" min="1" max="100" value="100" style="width:56px;"> %</span>
+          </div>
+        </div>
+      </div>
+      <div class="form-field"><label>案件概要</label><textarea id="np-overview" rows="3" placeholder="案件の概要..."></textarea></div>
+      <div class="form-field"><label>依頼者情報（住所・連絡先など）</label><textarea id="np-clientInfo" rows="3" placeholder="依頼者の詳細情報..."></textarea></div>
+      <div class="form-field"><label>相手方情報（住所・連絡先など）</label><textarea id="np-opponentInfo" rows="3" placeholder="相手方の詳細情報..."></textarea></div>
+      <div class="form-field"><label>メモ</label><textarea id="np-memo" rows="3" placeholder="備考..."></textarea></div>`;
+  } else {
+    fields = `
+      <div class="form-field"><label>プロジェクト名 *</label><input id="np-name" placeholder="プロジェクト名"></div>
+      <div class="form-field"><label>種類</label>
+        <select id="np-otherType">
+          <option value="採用">採用</option>
+          <option value="その他プロジェクト">その他プロジェクト</option>
+          <option value="営業">営業</option>
+          <option value="その他タスク">その他タスク</option>
+        </select>
+      </div>
+      <div class="form-field"><label>メモ</label><textarea id="np-memo" rows="5" placeholder="メモ..."></textarea></div>`;
+  }
+
+  return `
+  <div class="page-header"><h1 class="page-title">立件 — <span>${typeLabel}</span></h1></div>
+  <div class="page-content">
+    <div class="step-indicator">
+      <div class="step done" onclick="newProjStep=1;renderPage()">① 種別選択</div>
+      <div class="step active">② 情報入力</div>
+      <div class="step">③ 完了</div>
+    </div>
+    <div class="card" style="max-width:640px;">
+      ${fields}
+      <div style="display:flex;gap:10px;margin-top:8px;">
+        <button class="btn btn-outline" onclick="newProjStep=1;renderPage()">← 戻る</button>
+        <button class="btn btn-gold" onclick="submitNewProject()">立件する</button>
+      </div>
+    </div>
+  </div>`;
+}
+function submitNewProject() {
+  let name = (document.getElementById('np-name')?.value || '').trim();
+  if (newProjType === 'komonor') {
+    // 顧問: 法人名をプロジェクト名に
+    name = (document.getElementById('np-corpName')?.value || '').trim();
+    if (!name) { alert('法人名を入力してください'); return; }
+  } else if (newProjType === 'spot') {
+    // スポット: 依頼者名 + 案件種別を自動結合
+    const client = (document.getElementById('np-clientName')?.value || '').trim();
+    const stype = document.getElementById('np-spotType')?.value || '';
+    if (!client) { alert('依頼者名を入力してください'); return; }
+    name = stype && stype !== '__other__' ? `${client} ${stype}` : client;
+  } else {
+    if (!name) { alert('プロジェクト名を入力してください'); return; }
+  }
+  const id = genId();
+  const base = { id, type: newProjType, name, starred: false, createdAt: todayStr(), memo: document.getElementById('np-memo')?.value || '' };
+
+  if (newProjType === 'komonor') {
+    const fee = Number(document.getElementById('np-fee')?.value || 0);
+    const contractDate = document.getElementById('np-contractDate')?.value || '';
+    if (!fee) { alert('月額顧問料を入力してください'); return; }
+    if (!contractDate) { alert('契約日を入力してください'); return; }
+    const komonorBgRaw = document.querySelector('input[name="np-komonor-bgtype"]:checked')?.value || '自分';
+    const komonorBg = komonorBgRaw === 'other' ? 'その他' : komonorBgRaw;
+    const komonorRatio = komonorBgRaw === 'other' ? Number(document.getElementById('np-komonor-ratio')?.value || 100) : null;
+    Object.assign(base, {
+      corporateName: name,
+      representativeName: document.getElementById('np-repName')?.value || '',
+      address: document.getElementById('np-address')?.value || '',
+      businessContent: document.getElementById('np-business')?.value || '',
+      url: document.getElementById('np-url')?.value || '',
+      monthlyFee: fee,
+      feeHistory: [{ amount: fee, startDate: contractDate }],
+      contractDate,
+      corporateEstDate: document.getElementById('np-corpEstDate')?.value || '',
+      acceptanceBackground: komonorBg,
+      acceptanceRatio: komonorRatio,
+    });
+  } else if (newProjType === 'spot') {
+    const bgType = document.querySelector('input[name="np-bgtype"]:checked')?.value || '自分';
+    const isFixed = ['LawRoom','他弁護士','自分'].includes(bgType);
+    const bgText = isFixed ? bgType : (document.getElementById('np-background')?.value || '');
+    const acceptanceBackground = bgText;
+    const acceptanceRatio = bgType === 'other' ? Number(document.getElementById('np-ratio')?.value || 100) : null;
+    Object.assign(base, {
+      spotType: document.getElementById('np-spotType')?.value || '',
+      clientName: document.getElementById('np-clientName')?.value || '',
+      opponentName: document.getElementById('np-opponentName')?.value || '',
+      acceptanceBackground,
+      ...(acceptanceRatio !== null ? { acceptanceRatio } : {}),
+      overview: document.getElementById('np-overview')?.value || '',
+      clientInfo: document.getElementById('np-clientInfo')?.value || '',
+      opponentInfo: document.getElementById('np-opponentInfo')?.value || '',
+    });
+  } else {
+    base.otherType = document.getElementById('np-otherType')?.value || '';
+  }
+
+  state.projects[id] = base;
+  newProjStep = 1; newProjType = ''; newProjData = {};
+  checkRecurringTasks();
+  if (base.type === 'komonor') autoGenerateKomonorSales(id);
+  scheduleSave();
+  renderSidebar();
+  navigate('project', id);
+}
+
+// ============================================================
+// PROJECT LIST
+// ============================================================
+function renderProjectList() {
+  return `
+  <div class="page-header">
+    <h1 class="page-title">プロジェクト<span>一覧</span></h1>
+  </div>
+  <div class="page-content">
+    <div style="position:relative;margin-bottom:16px;max-width:360px;">
+      <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text3);">🔍</span>
+      <input id="proj-list-search" type="text" placeholder="プロジェクト名・法人名・依頼者名で検索..."
+        value="${escHtml(projListSearch)}"
+        oninput="projListSearch=this.value;updateProjList()"
+        style="padding:8px 12px 8px 32px;font-size:13px;width:100%;box-sizing:border-box;">
+    </div>
+    <div id="proj-list-content">${renderProjListContent()}</div>
+  </div>`;
+}
+function updateProjList() {
+  const el = document.getElementById('proj-list-content');
+  if (el) el.innerHTML = renderProjListContent();
+}
+function renderProjListContent() {
+  const q = projListSearch.toLowerCase();
+  const sortProjects = arr => arr.sort((a,b) => {
+    if (a.starred && !b.starred) return -1;
+    if (!a.starred && b.starred) return 1;
+    return (a.name||'').localeCompare(b.name||'');
+  });
+  const all = Object.values(state.projects);
+  const typeMap = { komonor:'顧問', spot:'スポット', other:'その他' };
+  const typeClass = { komonor:'badge-komonor', spot:'badge-spot', other:'badge-other' };
+
+  const matchesQ = p => !q || (p.name||'').toLowerCase().includes(q) ||
+    (p.corporateName||'').toLowerCase().includes(q) ||
+    (p.clientName||'').toLowerCase().includes(q);
+
+  const makeCard = (p) => {
+    const tasks = Object.values(state.tasks).filter(t => t.projectId === p.id && !t.completed);
+    const overdue = tasks.filter(t => t.dueDate && t.dueDate < todayStr()).length;
+    const closedBadge = p.closedAt ? `<span class="spot-type-tag" style="color:var(--text3);border-color:var(--border);">終了</span>` : '';
+    const bg = p.acceptanceBackground || '';
+    const bgBadge = p.type === 'komonor' && bg && bg !== '自分'
+      ? `<span class="spot-type-tag" style="font-size:10px;color:var(--text3);">${escHtml(bg)}</span>` : '';
+    return `
+    <div class="proj-card" onclick="navigate('project','${p.id}')" style="${p.closedAt?'opacity:.6;':''}">
+      <div class="proj-card-header">
+        <button class="proj-star ${p.starred?'starred':''}" onclick="event.stopPropagation();toggleStar('${p.id}')">★</button>
+        <div>
+          <div class="proj-card-name">${escHtml(p.name||'(無題)')}</div>
+          <div style="display:flex;gap:6px;margin-top:4px;flex-wrap:wrap;">
+            <span class="proj-type-badge ${typeClass[p.type]||'badge-other'}">${typeMap[p.type]||p.type}</span>
+            ${p.spotType ? `<span class="spot-type-tag">${escHtml(p.spotType)}</span>` : ''}
+            ${p.otherType ? `<span class="spot-type-tag">${escHtml(p.otherType)}</span>` : ''}
+            ${bgBadge}${closedBadge}
+          </div>
+        </div>
+      </div>
+      <div class="proj-card-meta">
+        ${p.corporateName ? `法人名: ${escHtml(p.corporateName)}<br>` : ''}
+        ${p.clientName ? `依頼者: ${escHtml(p.clientName)}<br>` : ''}
+        ${p.monthlyFee ? `顧問料: ${fmtMoney(p.monthlyFee)}/月<br>` : ''}
+        ${p.closedAt && p.type === 'spot' ? `<span style="color:var(--green);font-size:11px;">✅ 完了日: ${fmtDate(p.closedAt)}</span><br>` : ''}
+        ${p.closedAt && p.type === 'komonor' ? `<span style="color:var(--text3);font-size:11px;">🔒 終了: ${p.closedAt}まで</span><br>` : ''}
+        作成: ${fmtDate(p.createdAt)}
+      </div>
+      <div class="proj-card-tasks">
+        タスク: <span class="t-count">${tasks.length}</span>件
+        ${overdue ? `<span style="color:var(--red);margin-left:8px;">⚠ 期限超過 ${overdue}件</span>` : ''}
+      </div>
+    </div>`;
+  };
+
+  const makeSection = (label, icon, color, projects) => {
+    if (!projects.length) return '';
+    return `
+      <div style="margin-bottom:24px;">
+        <div style="font-size:12px;font-weight:700;color:${color};letter-spacing:1px;margin-bottom:10px;display:flex;align-items:center;gap:6px;">
+          <span>${icon}</span>${label} <span style="font-weight:400;color:var(--text3);font-size:11px;">(${projects.length}件)</span>
+        </div>
+        <div class="proj-grid">${projects.map(makeCard).join('')}</div>
+      </div>`;
+  };
+
+  const active = all.filter(p => !p.closedAt && matchesQ(p));
+  const closed = all.filter(p => p.closedAt && matchesQ(p));
+
+  // 4セクション分類
+  const selfKomonor   = sortProjects(active.filter(p => p.type === 'komonor' && (p.acceptanceBackground === '自分' || !p.acceptanceBackground)));
+  const otherKomonor  = sortProjects(active.filter(p => p.type === 'komonor' && p.acceptanceBackground && p.acceptanceBackground !== '自分'));
+  const spot          = sortProjects(active.filter(p => p.type === 'spot'));
+  const other         = sortProjects(active.filter(p => p.type !== 'komonor' && p.type !== 'spot'));
+
+  let html = '';
+  if (!active.length && !q) {
+    html = `<div class="empty-state"><div class="empty-icon">📁</div><p>プロジェクトがありません<br>「立件」からプロジェクトを作成してください</p></div>`;
+  } else if (!active.length && q) {
+    html = `<div class="empty-state"><p>「${escHtml(projListSearch)}」に一致するアクティブなプロジェクトはありません</p></div>`;
+  } else if (q) {
+    // 検索時は分類せず全表示
+    html = `<div class="proj-grid">${sortProjects(active).map(makeCard).join('')}</div>`;
+  } else {
+    html = makeSection('顧問（自分）', '◉', 'var(--gold)', selfKomonor)
+         + makeSection('顧問（自分以外）', '◎', 'var(--text2)', otherKomonor)
+         + makeSection('スポット', '◆', 'var(--blue, #5b8fd4)', spot)
+         + makeSection('その他', '◇', 'var(--text3)', other);
+    if (!html) html = `<div class="empty-state"><p>プロジェクトがありません</p></div>`;
+  }
+
+  // 完了済みセクション
+  const closedAll = q ? closed : all.filter(p => p.closedAt && matchesQ(p));
+  let closedSection = '';
+  if (!q && closedAll.length > 0) {
+    const btnLabel = showClosedProjects ? `▲ 完了済みを隠す (${closedAll.length}件)` : `▼ 完了済みを表示 (${closedAll.length}件)`;
+    closedSection = `
+      <div style="margin-top:20px;border-top:1px solid var(--border);padding-top:16px;">
+        <button class="btn btn-outline btn-sm" onclick="showClosedProjects=!showClosedProjects;updateProjList()">${btnLabel}</button>
+        ${showClosedProjects ? `<div class="proj-grid" style="margin-top:12px;">${sortProjects(closedAll).map(makeCard).join('')}</div>` : ''}
+      </div>`;
+  } else if (q && closedAll.length > 0) {
+    closedSection = `
+      <div style="margin-top:20px;border-top:1px solid var(--border);padding-top:12px;">
+        <div style="font-size:12px;color:var(--text3);margin-bottom:10px;">完了済み (${closedAll.length}件)</div>
+        <div class="proj-grid">${sortProjects(closedAll).map(makeCard).join('')}</div>
+      </div>`;
+  }
+
+  return html + closedSection;
+}
+
+// ============================================================
+// PROJECT PAGE
+// ============================================================
+function renderProjectPage(id) {
+  const p = state.projects[id];
+  if (!p) return `<div class="page-content"><div class="empty-state"><p>プロジェクトが見つかりません</p></div></div>`;
+  const typeMap = { komonor:'顧問', spot:'スポット', other:'その他' };
+  const typeClass = { komonor:'badge-komonor', spot:'badge-spot', other:'badge-other' };
+
+  // Tasks for this project
+  const activeTasks = Object.values(state.tasks)
+    .filter(t => t.projectId === id && !t.completed)
+    .sort((a,b) => (a.order||0) - (b.order||0));
+  const completedTasks = Object.values(state.tasks)
+    .filter(t => t.projectId === id && t.completed)
+    .sort((a,b) => new Date(b.completedAt||0) - new Date(a.completedAt||0));
+
+  const tasksHtml = activeTasks.map(t => taskCardHtml(t, false)).join('') +
+    `<button class="add-task-btn" onclick="openAddTaskModal('${id}')">＋ タスクを追加</button>`;
+
+  // Sales for this project
+  const projSales = Object.values(state.sales).filter(s => s.projectId === id)
+    .sort((a,b) => (a.expectedDate||'').localeCompare(b.expectedDate||''));
+  const totalSales = projSales.reduce((s,x) => s + (Number(x.amount)||0), 0);
+  const salesHtml = projSales.length ? `
+    <table class="sales-table">
+      <thead><tr><th>費目</th><th>金額</th><th>受取予定日</th><th>状況</th><th></th></tr></thead>
+      <tbody>
+        ${projSales.map(s => `
+          <tr>
+            <td>${escHtml(s.saleType)}${s.manuallyEdited ? ' <span style="color:var(--gold);font-size:10px;">✎</span>' : ''}</td>
+            <td class="amount">${fmtMoney(s.amount)}</td>
+            <td>${fmtDate(s.expectedDate)}</td>
+            <td><span class="${s.received?'received-badge':'pending-badge'} sale-type-badge">${s.received?'受取済':'未受取'}</span></td>
+            <td style="white-space:nowrap;">
+              <button class="btn btn-xs btn-outline" onclick="openEditSaleModal('${s.id}')">✎ 編集</button>
+              <button class="btn btn-xs btn-outline" onclick="toggleSaleReceived('${s.id}')">
+              ${s.received?'未受取に戻す':'受取済にする'}</button>
+              <button class="btn btn-xs btn-danger" onclick="deleteSale('${s.id}')">削除</button>
+            </td>
+          </tr>`).join('')}
+      </tbody>
+    </table>
+    <div class="sales-total">合計: ${fmtMoney(totalSales)}</div>
+  ` : `<div class="text-muted text-sm">売上データがありません</div>`;
+
+  let specificHtml = '';
+  if (p.type === 'komonor') specificHtml = renderKomonorFields(p);
+  else if (p.type === 'spot') specificHtml = renderSpotFields(p);
+  else specificHtml = renderOtherFields(p);
+
+  const completedToggleHtml = completedTasks.length ? `
+    <div style="margin-top:30px;">
+      <button class="completed-tasks-toggle" onclick="toggleCompletedSection(this)">
+        ▶ 完了済みタスク（${completedTasks.length}件）
+      </button>
+      <div class="completed-section hidden" id="completed-section">
+        ${completedTasks.map(t => `
+          <div class="task-card" style="opacity:.6;cursor:default;margin-top:6px;" onclick="openRightSidebar('${t.id}')">
+            <div class="task-check checked" style="pointer-events:none;">✓</div>
+            <div class="task-info">
+              <div class="task-name" style="text-decoration:line-through;">${escHtml(t.name)}</div>
+              <div class="task-meta">
+                ${t.completedAt ? `<span class="text-muted text-xs">完了: ${fmtDate(t.completedAt)}</span>` : ''}
+                ${t.dueDate ? `<span class="text-muted text-xs">期限: ${fmtDate(t.dueDate)}</span>` : ''}
+              </div>
+            </div>
+          </div>`).join('')}
+      </div>
+    </div>` : '';
+
+  return `
+  <div class="proj-page-header">
+    <div style="flex:1;">
+      <div class="proj-page-name">${escHtml(p.name||'(無題)')}</div>
+      <div class="proj-page-badges">
+        <span class="proj-type-badge ${typeClass[p.type]}">${typeMap[p.type]}</span>
+        ${p.spotType ? `<span class="spot-type-tag">${escHtml(p.spotType)}</span>` : ''}
+        ${p.otherType ? `<span class="spot-type-tag">${escHtml(p.otherType)}</span>` : ''}
+        <span class="text-muted text-xs">作成: ${fmtDate(p.createdAt)}</span>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start;">
+      <button class="proj-star ${p.starred?'starred':''}" onclick="toggleStar('${id}');renderSidebar();renderPage();" style="font-size:20px;background:none;color:var(--text3);">★</button>
+      ${p.type === 'spot' ? (p.closedAt
+        ? `<span style="font-size:12px;color:var(--text3);">✅ 完了: ${fmtDate(p.closedAt)}</span><button class="btn btn-outline btn-sm" onclick="reopenProject('${id}')">再開</button>`
+        : `<button class="btn btn-outline btn-sm" style="color:#4caf50;border-color:#4caf50;" onclick="openCloseSpotModal('${id}')">✅ 案件完了</button>`)
+        : ''}
+      ${p.type === 'komonor' ? (p.closedAt
+        ? `<span style="font-size:12px;color:var(--text3);">🔒 終了: ${p.closedAt}まで</span><button class="btn btn-outline btn-sm" onclick="reopenKomonor('${id}')">顧問再開</button>`
+        : `<button class="btn btn-outline btn-sm" style="color:#e05555;border-color:#e05555;" onclick="openCloseKomonorModal('${id}')">🔒 顧問終了</button>`)
+        : ''}
+      <button class="btn btn-outline btn-sm" onclick="openEditProjectModal('${id}')">✏ 編集</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteProject('${id}')">削除</button>
+    </div>
+  </div>
+  <div class="proj-page-content">
+    <div class="section-title">タスク</div>
+    <div id="proj-task-list">${tasksHtml}</div>
+
+    ${specificHtml}
+
+    <div class="section-title" style="margin-top:24px;">売上・費用</div>
+    ${salesHtml}
+    <button class="btn btn-outline btn-sm mt-8" onclick="openAddSaleModal('${id}')">＋ 売上を追加</button>
+
+    ${completedToggleHtml}
+  </div>`;
+}
+function renderKomonorFields(p) {
+  const history = (p.feeHistory || []).slice().sort((a,b) => (a.startDate||'').localeCompare(b.startDate||''));
+  const feeHistoryHtml = history.length ? `
+    <div style="margin-top:8px;">
+      <table class="sales-table" style="font-size:12px;">
+        <thead><tr><th>適用開始日</th><th>月額顧問料</th></tr></thead>
+        <tbody>${history.map((h,i) => `
+          <tr style="${i===history.length-1?'color:var(--gold);font-weight:700;':''}">
+            <td>${fmtDate(h.startDate)}</td>
+            <td>${fmtMoney(h.amount)}／月${i===history.length-1?' ← 現在':''}</td>
+          </tr>`).join('')}</tbody>
+      </table>
+    </div>` : '';
+  return `
+  <div class="section-title" style="margin-top:24px;">顧問先情報</div>
+  <div class="info-grid">
+    <div class="info-item"><label>法人名</label><div class="value">${escHtml(p.corporateName)||'—'}</div></div>
+    <div class="info-item"><label>代表者名</label><div class="value">${escHtml(p.representativeName)||'—'}</div></div>
+    <div class="info-item"><label>所在地</label><div class="value">${escHtml(p.address)||'—'}</div></div>
+    <div class="info-item"><label>業務内容</label><div class="value">${escHtml(p.businessContent)||'—'}</div></div>
+    <div class="info-item"><label>URL</label><div class="value">${p.url?`<a href="${escHtml(p.url)}" target="_blank">${escHtml(p.url)}</a>`:'—'}</div></div>
+    <div class="info-item"><label>契約日</label><div class="value">${fmtDate(p.contractDate)}</div></div>
+    <div class="info-item"><label>法人設立日</label><div class="value">${fmtDate(p.corporateEstDate)}</div></div>
+  </div>
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px;">
+    <div class="section-title" style="margin:0;flex:1;">月額顧問料履歴</div>
+    <button class="btn btn-outline btn-sm" onclick="openFeeChangeModal('${p.id}')">＋ 顧問料を変更</button>
+  </div>
+  ${feeHistoryHtml || `<div class="text-muted text-sm">履歴なし</div>`}
+  ${(() => {
+    const st = komonorTimeStats(p.id);
+    const today = new Date();
+    return `
+  <div class="section-title" style="margin-top:24px;">時間単価分析</div>
+  <div class="info-grid">
+    ${timeStatsHtml(`当月（${today.getMonth()+1}月）`, st.hoursMonth, st.feeMonth)}
+    ${timeStatsHtml(`${today.getFullYear()}年 年間`, st.hoursYear, st.feeYear)}
+    ${timeStatsHtml('累計', st.hoursAll, st.feeAll)}
+  </div>`;
+  })()}
+  <div class="section-title" style="margin-top:20px;">メモ</div>
+  <div class="memo-box" contenteditable="true" onblur="saveMemo('${p.id}',this.textContent)">${escHtml(p.memo||'')}</div>`;
+}
+function renderSpotFields(p) {
+  return `
+  <div class="section-title" style="margin-top:24px;">案件情報</div>
+  <div style="margin-bottom:14px;">
+    <button class="copy-btn" onclick="copySpotText('${p.id}')">📋 AIに貼り付け用テキストをコピー</button>
+  </div>
+  <div class="info-grid">
+    <div class="info-item"><label>依頼者名</label><div class="value">${escHtml(p.clientName)||'—'}</div></div>
+    <div class="info-item"><label>相手方名</label><div class="value">${escHtml(p.opponentName)||'—'}</div></div>
+    <div class="info-item">
+      <label>案件完了日</label>
+      <div class="value">
+        ${p.closedAt
+          ? `<input type="date" value="${p.closedAt}" onchange="updateSpotClosedDate('${p.id}',this.value)" style="font-size:13px;padding:3px 6px;">`
+          : `<span style="color:var(--text3);font-size:12px;">未完了</span>`}
+      </div>
+    </div>
+    ${p.acceptanceRatio != null ? `<div class="info-item"><label>計上率</label><div class="value">${p.acceptanceRatio}%</div></div>` : ''}
+  </div>
+  <div class="form-field" style="margin-top:12px;">
+    <label style="color:var(--text3);font-size:11px;margin-bottom:6px;">受任の経緯</label>
+    <div class="memo-box" contenteditable="true" style="min-height:60px;" onblur="saveField('${p.id}','acceptanceBackground',this.textContent)">${escHtml(p.acceptanceBackground||'')}</div>
+  </div>
+  <div class="form-field" style="margin-top:12px;">
+    <label style="color:var(--text3);font-size:11px;margin-bottom:6px;">案件概要</label>
+    <div class="memo-box" contenteditable="true" onblur="saveField('${p.id}','overview',this.textContent)">${escHtml(p.overview||'')}</div>
+  </div>
+  <div class="form-row" style="margin-top:12px;">
+    <div class="form-field">
+      <label style="color:var(--text3);font-size:11px;margin-bottom:6px;">依頼者情報</label>
+      <div class="memo-box" contenteditable="true" style="min-height:80px;" onblur="saveField('${p.id}','clientInfo',this.textContent)">${escHtml(p.clientInfo||'')}</div>
+    </div>
+    <div class="form-field">
+      <label style="color:var(--text3);font-size:11px;margin-bottom:6px;">相手方情報</label>
+      <div class="memo-box" contenteditable="true" style="min-height:80px;" onblur="saveField('${p.id}','opponentInfo',this.textContent)">${escHtml(p.opponentInfo||'')}</div>
+    </div>
+  </div>
+  <div class="section-title" style="margin-top:16px;">メモ</div>
+  <div class="memo-box" contenteditable="true" onblur="saveMemo('${p.id}',this.textContent)">${escHtml(p.memo||'')}</div>`;
+}
+function renderOtherFields(p) {
+  return `
+  <div class="section-title" style="margin-top:24px;">メモ</div>
+  <div class="memo-box" contenteditable="true" onblur="saveMemo('${p.id}',this.textContent)">${escHtml(p.memo||'')}</div>`;
+}
+function openCloseSpotModal(id) {
+  openModal(`
+    <div class="modal-title">✅ 案件完了</div>
+    <p style="font-size:12px;color:var(--text2);margin-bottom:16px;">完了日を入力してください。売上の受取予定日はこの月の末日に設定されます。</p>
+    <div class="form-field"><label>案件完了日</label><input id="cs-date" type="date" value="${todayStr()}"></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal()">キャンセル</button>
+      <button class="btn btn-gold" style="border-color:#4caf50;background:#4caf50;" onclick="submitCloseSpot('${id}')">完了にする</button>
+    </div>
+  `);
+}
+function submitCloseSpot(id) {
+  const p = state.projects[id];
+  if (!p) return;
+  const date = document.getElementById('cs-date')?.value || todayStr();
+  p.closedAt = date;
+  // 既存スポット売上の受取予定日を完了月末日に更新
+  const eom = lastDayOfMonth(new Date(date).getFullYear(), new Date(date).getMonth());
+  Object.values(state.sales).forEach(s => {
+    if (s.projectId === id && !s.manuallyEdited) s.expectedDate = eom;
+  });
+  scheduleSave();
+  closeModal();
+  renderSidebar();
+  renderPage();
+}
+function updateSpotClosedDate(id, date) {
+  const p = state.projects[id];
+  if (!p) return;
+  p.closedAt = date;
+  // 売上の受取予定日も更新
+  if (date) {
+    const eom = lastDayOfMonth(new Date(date).getFullYear(), new Date(date).getMonth());
+    Object.values(state.sales).forEach(s => {
+      if (s.projectId === id && !s.manuallyEdited) s.expectedDate = eom;
+    });
+  }
+  scheduleSave();
+  renderSidebar();
+  renderPage();
+}
+function reopenProject(id) {
+  if (!state.projects[id]) return;
+  delete state.projects[id].closedAt;
+  scheduleSave();
+  renderSidebar();
+  renderPage();
+}
+function openCloseKomonorModal(id) {
+  const nowYM = todayStr().slice(0, 7);
+  openModal(`
+    <div class="modal-title">顧問終了</div>
+    <p style="font-size:12px;color:var(--text2);margin-bottom:16px;">最終月を指定してください。その月分まで顧問料が発生し、翌月以降は自動生成されません。</p>
+    <div class="form-field"><label>最終月</label><input id="ck-month" type="month" value="${nowYM}"></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal()">キャンセル</button>
+      <button class="btn btn-danger" onclick="submitCloseKomonor('${id}')">終了する</button>
+    </div>
+  `);
+}
+function submitCloseKomonor(id) {
+  const p = state.projects[id];
+  if (!p) return;
+  const endYM = document.getElementById('ck-month')?.value || '';
+  if (!endYM) { alert('最終月を選択してください'); return; }
+  p.closedAt = endYM; // "YYYY-MM" で保存
+  // 最終月より後の自動生成エントリを削除
+  Object.keys(state.sales).forEach(sid => {
+    const s = state.sales[sid];
+    if (s.projectId === id && s.recurringKey && s.recurringKey.startsWith('komonor-fee-')) {
+      const entryYM = s.recurringKey.slice(-7);
+      if (entryYM > endYM) delete state.sales[sid];
+    }
+  });
+  // 最終月までのエントリが未生成なら生成
+  autoGenerateKomonorSales(id);
+  scheduleSave();
+  closeModal();
+  renderSidebar();
+  renderPage();
+}
+function reopenKomonor(id) {
+  if (!state.projects[id]) return;
+  delete state.projects[id].closedAt;
+  autoGenerateKomonorSales(id);
+  scheduleSave();
+  renderSidebar();
+  renderPage();
+}
+function saveMemo(id, text) {
+  if (!state.projects[id]) return;
+  state.projects[id].memo = text;
+  scheduleSave();
+}
+function saveField(id, field, text) {
+  if (!state.projects[id]) return;
+  state.projects[id][field] = text;
+  scheduleSave();
+}
+function toggleCompletedSection(btn) {
+  const sec = document.getElementById('completed-section');
+  if (!sec) return;
+  sec.classList.toggle('hidden');
+  btn.textContent = sec.classList.contains('hidden')
+    ? btn.textContent.replace('▼','▶')
+    : btn.textContent.replace('▶','▼');
+}
+function copySpotText(id) {
+  const p = state.projects[id];
+  if (!p) return;
+  const text = `【案件名】${p.name||''}\n【種類】${p.spotType||''}\n【依頼者】${p.clientName||''}\n【相手方】${p.opponentName||''}\n【受任の経緯】${p.acceptanceBackground||''}\n\n【案件概要】\n${p.overview||''}\n\n【依頼者情報】\n${p.clientInfo||''}\n\n【相手方情報】\n${p.opponentInfo||''}\n\n【メモ】\n${p.memo||''}`;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = event.currentTarget;
+    btn.textContent = '✅ コピーしました';
+    setTimeout(() => btn.textContent = '📋 AIに貼り付け用テキストをコピー', 2000);
+  }).catch(() => {
+    prompt('以下をコピーしてください:', text);
+  });
+}
+function deleteProject(id) {
+  if (!confirm('このプロジェクトを削除しますか？（タスクも削除されます）')) return;
+  delete state.projects[id];
+  Object.keys(state.tasks).forEach(tid => { if (state.tasks[tid].projectId === id) delete state.tasks[tid]; });
+  Object.keys(state.sales).forEach(sid => { if (state.sales[sid].projectId === id) delete state.sales[sid]; });
+  scheduleSave();
+  renderSidebar();
+  navigate('projectlist');
+}
+
+// ============================================================
+// EDIT PROJECT MODAL
+// ============================================================
+function openEditProjectModal(id) {
+  const p = state.projects[id];
+  if (!p) return;
+  let fields = '';
+  if (p.type === 'komonor') {
+    fields = `
+      <div class="form-field"><label>プロジェクト名</label><input id="ep-name" value="${escHtml(p.name||'')}"></div>
+      <div class="form-row">
+        <div class="form-field"><label>法人名</label><input id="ep-corpName" value="${escHtml(p.corporateName||'')}"></div>
+        <div class="form-field"><label>代表者名</label><input id="ep-repName" value="${escHtml(p.representativeName||'')}"></div>
+      </div>
+      <div class="form-field"><label>所在地</label><input id="ep-address" value="${escHtml(p.address||'')}"></div>
+      <div class="form-field"><label>業務内容</label><input id="ep-business" value="${escHtml(p.businessContent||'')}"></div>
+      <div class="form-field"><label>URL</label><input id="ep-url" value="${escHtml(p.url||'')}"></div>
+      <div class="form-row">
+        <div class="form-field"><label>月額顧問料</label><input id="ep-fee" type="number" value="${p.monthlyFee||''}"></div>
+        <div class="form-field"><label>契約日</label><input id="ep-contractDate" type="date" value="${p.contractDate||''}"></div>
+      </div>
+      <div class="form-field"><label>法人設立日</label><input id="ep-corpEstDate" type="date" value="${p.corporateEstDate||''}"></div>
+      <div class="form-field">
+        <label>受任の経緯</label>
+        <div style="display:flex;gap:16px;flex-wrap:wrap;">
+          <span class="radio-opt" onclick="this.querySelector('input').click()"><input type="radio" name="ep-komonor-bgtype" value="自分" ${(p.acceptanceBackground||'自分')==='自分'?'checked':''} onchange="toggleKomonorBgInput(this,'ep')" onclick="event.stopPropagation()"> 自分 <span style="font-size:10px;color:var(--text3);">(×100%)</span></span>
+          <span class="radio-opt" onclick="this.querySelector('input').click()"><input type="radio" name="ep-komonor-bgtype" value="他弁護士" ${p.acceptanceBackground==='他弁護士'?'checked':''} onchange="toggleKomonorBgInput(this,'ep')" onclick="event.stopPropagation()"> 他弁護士 <span style="font-size:10px;color:var(--text3);">(×40%)</span></span>
+          <span class="radio-opt" onclick="this.querySelector('input').click()"><input type="radio" name="ep-komonor-bgtype" value="other" ${p.acceptanceBackground==='その他'?'checked':''} onchange="toggleKomonorBgInput(this,'ep')" onclick="event.stopPropagation()"> その他</span>
+        </div>
+        <div id="ep-komonor-ratio-wrap" style="display:${p.acceptanceBackground==='その他'?'':'none'};margin-top:6px;">
+          <label>売上計上割合 (%)</label><input id="ep-komonor-ratio" type="number" min="1" max="100" value="${p.acceptanceBackground==='その他'?(p.acceptanceRatio||''):''}" placeholder="例: 50" style="width:100px;">
+        </div>
+      </div>`;
+  } else if (p.type === 'spot') {
+    const spotTypes = ['離婚','交通事故','相続','個人債務整理','法人債務整理','貸金','建明','刑事加害者','刑事被害者','労働（法人側）','労働（労働者側）','報酬支払請求'];
+    fields = `
+      <div class="form-field"><label>プロジェクト名</label><input id="ep-name" value="${escHtml(p.name||'')}"></div>
+      <div class="form-row">
+        <div class="form-field"><label>案件種類</label>
+          <select id="ep-spotType">
+            ${spotTypes.map(t => `<option ${p.spotType===t?'selected':''}>${t}</option>`).join('')}
+            <option value="__other__" ${p.spotType==='__other__'?'selected':''}>その他</option>
+          </select>
+        </div>
+        <div class="form-field"><label>依頼者名</label><input id="ep-clientName" value="${escHtml(p.clientName||'')}"></div>
+      </div>
+      <div class="form-field"><label>相手方名</label><input id="ep-opponentName" value="${escHtml(p.opponentName||'')}"></div>
+      <div class="form-field">
+        <label>受任の経緯</label>
+        <div style="display:flex;gap:14px;margin-bottom:8px;flex-wrap:wrap;">
+          ${['自分','LawRoom','他弁護士'].map(v => {
+            const checked = p.acceptanceBackground === v ? 'checked' : '';
+            const badge = v==='LawRoom'?'(×70%)':v==='他弁護士'?'(×40%)':v==='自分'?'(×100%)':'';
+            return `<span class="radio-opt" onclick="this.querySelector('input').click()"><input type="radio" name="ep-bgtype" value="${v}" ${checked} onchange="epToggleBg(this)" onclick="event.stopPropagation()"> ${v} <span style="font-size:10px;color:var(--text3);">${badge}</span></span>`;
+          }).join('')}
+          <span class="radio-opt" onclick="this.querySelector('input').click()"><input type="radio" name="ep-bgtype" value="other" ${!['自分','LawRoom','他弁護士'].includes(p.acceptanceBackground)?'checked':''} onchange="epToggleBg(this)" onclick="event.stopPropagation()"> その他</span>
+        </div>
+        <div id="ep-bg-wrap" style="${!['自分','LawRoom','他弁護士'].includes(p.acceptanceBackground)?'':'display:none'}">
+          <div style="display:flex;gap:8px;align-items:center;">
+            <input id="ep-background" value="${escHtml(['自分','LawRoom','他弁護士'].includes(p.acceptanceBackground)?'':p.acceptanceBackground||'')}" placeholder="具体的な経緯..." style="flex:1;">
+            <span style="display:inline-flex;align-items:center;gap:4px;white-space:nowrap;font-size:12px;color:var(--text2);">計上率 <input id="ep-ratio" type="number" min="1" max="100" value="${p.acceptanceRatio||100}" style="width:50px;"> %</span>
+          </div>
+        </div>
+      </div>`;
+  } else {
+    fields = `
+      <div class="form-field"><label>プロジェクト名</label><input id="ep-name" value="${escHtml(p.name||'')}"></div>
+      <div class="form-field"><label>種類</label>
+        <select id="ep-otherType">
+          ${['採用','その他プロジェクト','営業','その他タスク'].map(t => `<option ${p.otherType===t?'selected':''}>${t}</option>`).join('')}
+        </select>
+      </div>`;
+  }
+  openModal(`
+    <div class="modal-title">プロジェクト編集</div>
+    ${fields}
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal()">キャンセル</button>
+      <button class="btn btn-gold" onclick="submitEditProject('${id}')">保存</button>
+    </div>
+  `);
+}
+function submitEditProject(id) {
+  const p = state.projects[id];
+  if (!p) return;
+  p.name = document.getElementById('ep-name')?.value || p.name;
+  if (p.type === 'komonor') {
+    const newCorpName = document.getElementById('ep-corpName')?.value || '';
+    p.corporateName = newCorpName;
+    p.name = newCorpName || p.name; // 法人名をプロジェクト名に同期
+    p.representativeName = document.getElementById('ep-repName')?.value || '';
+    p.address = document.getElementById('ep-address')?.value || '';
+    p.businessContent = document.getElementById('ep-business')?.value || '';
+    p.url = document.getElementById('ep-url')?.value || '';
+    const newFee = Number(document.getElementById('ep-fee')?.value || 0);
+    const newDate = document.getElementById('ep-contractDate')?.value || '';
+    p.monthlyFee = newFee;
+    p.contractDate = newDate;
+    // feeHistory が空で contractDate と monthlyFee が揃ったら初期エントリを作成
+    if (newDate && newFee > 0 && (!p.feeHistory || !p.feeHistory.length)) {
+      p.feeHistory = [{ amount: newFee, startDate: newDate }];
+    }
+    const oldEst = p.corporateEstDate;
+    p.corporateEstDate = document.getElementById('ep-corpEstDate')?.value || '';
+    if (p.corporateEstDate !== oldEst) checkRecurringTasks();
+    const epKomonorBgRaw = document.querySelector('input[name="ep-komonor-bgtype"]:checked')?.value || '自分';
+    p.acceptanceBackground = epKomonorBgRaw === 'other' ? 'その他' : epKomonorBgRaw;
+    p.acceptanceRatio = epKomonorBgRaw === 'other' ? Number(document.getElementById('ep-komonor-ratio')?.value || 100) : null;
+    // 契約日・顧問料が変わった可能性があるので売上を再生成
+    autoGenerateKomonorSales(id);
+  } else if (p.type === 'spot') {
+    p.spotType = document.getElementById('ep-spotType')?.value || '';
+    p.clientName = document.getElementById('ep-clientName')?.value || '';
+    p.opponentName = document.getElementById('ep-opponentName')?.value || '';
+    const bgType = document.querySelector('input[name="ep-bgtype"]:checked')?.value || '自分';
+    const isFixed = ['自分','LawRoom','他弁護士'].includes(bgType);
+    p.acceptanceBackground = isFixed ? bgType : (document.getElementById('ep-background')?.value || '');
+    if (!isFixed) p.acceptanceRatio = Number(document.getElementById('ep-ratio')?.value || 100);
+    else delete p.acceptanceRatio;
+  } else {
+    p.otherType = document.getElementById('ep-otherType')?.value || '';
+  }
+  scheduleSave();
+  closeModal();
+  renderSidebar();
+  renderPage();
+}
+
+// ============================================================
+// TASK MODALS
+// ============================================================
+function openAddTaskModal(projectId) {
+  openModal(`
+    <div class="modal-title">タスクを追加</div>
+    <div class="form-field"><label>タスク名 *</label><input id="at-name" placeholder="タスク名を入力"></div>
+    <div class="form-row">
+      <div class="form-field"><label>依頼を受けた日</label><input id="at-reqDate" type="date" value="${todayStr()}"></div>
+      <div class="form-field"><label>完了期限</label><input id="at-dueDate" type="date"></div>
+    </div>
+    <div class="form-field"><label>見込み時間（分）</label><input id="at-est" type="number" placeholder="30" min="1"></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal()">キャンセル</button>
+      <button class="btn btn-gold" onclick="submitAddTask('${projectId}')">追加</button>
+    </div>
+  `);
+  setTimeout(() => document.getElementById('at-name')?.focus(), 50);
+}
+function submitAddTask(projectId) {
+  const name = (document.getElementById('at-name')?.value || '').trim();
+  if (!name) { alert('タスク名を入力してください'); return; }
+  const t = {
+    id: genId(), projectId,
+    name,
+    requestedAt: document.getElementById('at-reqDate')?.value || todayStr(),
+    dueDate: document.getElementById('at-dueDate')?.value || '',
+    estimatedMinutes: Number(document.getElementById('at-est')?.value || 0),
+    completed: false, completedAt: null, order: Date.now(),
+  };
+  state.tasks[t.id] = t;
+  scheduleSave();
+  closeModal();
+  renderSidebar();
+  renderPage();
+  setTimeout(setupProjectSortable, 100);
+}
+
+// ============================================================
+// SALES MODALS
+// ============================================================
+function openAddSaleModal(projectId) {
+  const p = state.projects[projectId];
+  let defaultTypes, showCustom = false;
+  if (p?.type === 'komonor') {
+    defaultTypes = ['顧問料（月額）','訴訟移行金','手続費用','その他'];
+    showCustom = true;
+  } else if (p?.type === 'spot') {
+    defaultTypes = ['着手金','移行金','報酬（固定）','報酬（10%）','報酬（15%）','手続費用','追加費用'];
+    showCustom = false; // 後入力欄で対応
+  } else {
+    defaultTypes = ['着手金','報酬金','顧問料','手続費用','訴訟移行金','成功報酬'];
+    showCustom = true;
+  }
+  const spotLater = p?.type === 'spot';
+  openModal(`
+    <div class="modal-title">売上を追加</div>
+    <div class="form-field"><label>費目</label>
+      <select id="as-type" onchange="(function(v){
+        const cw=document.getElementById('as-custom-wrap');
+        const lw=document.getElementById('as-later-wrap');
+        if(cw) cw.classList.toggle('hidden', v!=='__custom__');
+        if(lw) lw.classList.toggle('hidden', v!=='__later__');
+      })(this.value)">
+        ${defaultTypes.map(t => `<option>${t}</option>`).join('')}
+        ${showCustom ? `<option value="__custom__">カスタム...</option>` : ''}
+        ${spotLater ? `<option value="__later__">後入力</option>` : ''}
+      </select>
+    </div>
+    <div class="form-field hidden" id="as-custom-wrap"><label>カスタム費目名</label><input id="as-custom" placeholder="費目名"></div>
+    <div class="form-field hidden" id="as-later-wrap"><label>費目名（後で入力）</label><input id="as-later-name" placeholder="後で記入..."></div>
+    <div class="form-field"><label>金額（円）</label><input id="as-amount" type="number" placeholder="500000"></div>
+    <div class="form-field"><label>受取予定日</label><input id="as-date" type="date" value="${(() => {
+      if (p?.type === 'spot') {
+        const base = p.closedAt ? new Date(p.closedAt) : new Date();
+        return lastDayOfMonth(base.getFullYear(), base.getMonth());
+      }
+      return todayStr();
+    })()}"></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal()">キャンセル</button>
+      <button class="btn btn-gold" onclick="submitAddSale('${projectId}')">追加</button>
+    </div>
+  `);
+}
+function submitAddSale(projectId) {
+  const typeEl = document.getElementById('as-type');
+  let saleType;
+  if (typeEl?.value === '__custom__') {
+    saleType = document.getElementById('as-custom')?.value || 'その他';
+  } else if (typeEl?.value === '__later__') {
+    saleType = document.getElementById('as-later-name')?.value || '（後入力）';
+  } else {
+    saleType = typeEl?.value || '';
+  }
+  const amount = Number(document.getElementById('as-amount')?.value || 0);
+  const expectedDate = document.getElementById('as-date')?.value || '';
+  const s = { id: genId(), projectId, saleType, amount, expectedDate, received: false, receivedDate: '' };
+  state.sales[s.id] = s;
+  scheduleSave();
+  closeModal();
+  renderPage();
+}
+function toggleSaleReceived(id) {
+  if (!state.sales[id]) return;
+  state.sales[id].received = !state.sales[id].received;
+  state.sales[id].receivedDate = state.sales[id].received ? todayStr() : '';
+  scheduleSave();
+  renderPage();
+}
+function deleteSale(id) {
+  if (!confirm('この売上データを削除しますか？')) return;
+  delete state.sales[id];
+  scheduleSave();
+  renderPage();
+}
+
+// ============================================================
+// 顧問料変更モーダル
+// ============================================================
+function openFeeChangeModal(projectId) {
+  const nowYM = todayStr().slice(0, 7); // "YYYY-MM"
+  openModal(`
+    <div class="modal-title">顧問料を変更</div>
+    <p style="font-size:12px;color:var(--text2);margin-bottom:16px;">選択した月（含む）以降の顧問料を自動更新します。</p>
+    <div class="form-field"><label>新しい月額顧問料（円）</label><input id="fc-fee" type="number" placeholder="60000"></div>
+    <div class="form-field"><label>適用開始月</label><input id="fc-start" type="month" value="${nowYM}"></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal()">キャンセル</button>
+      <button class="btn btn-gold" onclick="submitFeeChange('${projectId}')">変更して売上を再生成</button>
+    </div>
+  `);
+}
+function submitFeeChange(projectId) {
+  const p = state.projects[projectId];
+  if (!p) return;
+  const fee = Number(document.getElementById('fc-fee')?.value || 0);
+  const startYM = document.getElementById('fc-start')?.value || ''; // "YYYY-MM"
+  if (!fee || !startYM) { alert('金額と適用開始月を入力してください'); return; }
+  if (!p.feeHistory) p.feeHistory = [];
+  // feeHistory は "YYYY-MM" で統一保存
+  p.feeHistory.push({ amount: fee, startDate: startYM });
+  p.feeHistory.sort((a,b) => (a.startDate||'').localeCompare(b.startDate||''));
+  p.monthlyFee = fee;
+  // 適用開始月以降の自動生成エントリを削除して再生成（手動編集済みは保持）
+  Object.keys(state.sales).forEach(sid => {
+    const s = state.sales[sid];
+    if (s.recurringKey && s.recurringKey.startsWith(`komonor-fee-${projectId}-`) && !s.manuallyEdited) {
+      const entryYM = s.recurringKey.slice(-7); // "YYYY-MM"
+      if (entryYM >= startYM) delete state.sales[sid];
+    }
+  });
+  autoGenerateKomonorSales(projectId);
+  scheduleSave();
+  closeModal();
+  renderPage();
+}
+
+// ============================================================
+// 売上編集モーダル（全種別共通）
+// ============================================================
+function openEditSaleModal(saleId) {
+  const s = state.sales[saleId];
+  if (!s) return;
+  const isKomonorFee = s.recurringKey && s.recurringKey.startsWith('komonor-fee-');
+  openModal(`
+    <div class="modal-title">売上・費用を編集</div>
+    <div class="form-field">
+      <label>費目</label>
+      <input id="esm-type" value="${escHtml(s.saleType)}" ${isKomonorFee ? 'readonly style="opacity:.5;"' : ''}>
+    </div>
+    <div class="form-field">
+      <label>金額（円）</label>
+      <input id="esm-amount" type="number" value="${s.amount}">
+    </div>
+    <div class="form-field">
+      <label>受取予定日</label>
+      <input id="esm-date" type="date" value="${s.expectedDate||''}">
+    </div>
+    ${isKomonorFee ? `<p style="font-size:11px;color:var(--text3);margin:4px 0 8px;">※ 顧問料の金額を手動変更すると一括変更の対象外になります。</p>
+    ${s.manuallyEdited ? `<button class="btn btn-outline btn-sm" onclick="resetSaleAmount('${saleId}')">自動計算に戻す</button>` : ''}` : ''}
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal()">キャンセル</button>
+      <button class="btn btn-gold" onclick="submitEditSaleModal('${saleId}')">保存</button>
+    </div>
+  `);
+}
+function submitEditSaleModal(saleId) {
+  const s = state.sales[saleId];
+  if (!s) return;
+  const amount = Number(document.getElementById('esm-amount')?.value || 0);
+  if (!amount) { alert('金額を入力してください'); return; }
+  const isKomonorFee = s.recurringKey && s.recurringKey.startsWith('komonor-fee-');
+  if (!isKomonorFee) {
+    s.saleType = document.getElementById('esm-type')?.value || s.saleType;
+  }
+  if (isKomonorFee && amount !== s.amount) s.manuallyEdited = true;
+  s.amount = amount;
+  s.expectedDate = document.getElementById('esm-date')?.value || s.expectedDate;
+  scheduleSave();
+  closeModal();
+  renderPage();
+}
+function resetSaleAmount(saleId) {
+  const s = state.sales[saleId];
+  if (!s || !s.recurringKey) return;
+  // recurringKey: "komonor-fee-{projectId}-YYYY-MM"
+  const parts = s.recurringKey.split('-');
+  const ym = parts.slice(-2).join('-'); // "YYYY-MM"
+  const projectId = parts.slice(2, -2).join('-');
+  const p = state.projects[projectId];
+  if (p) {
+    const [y, m] = ym.split('-').map(Number);
+    s.amount = getFeeForMonth(p, y, m - 1);
+  }
+  delete s.manuallyEdited;
+  scheduleSave();
+  closeModal();
+  renderPage();
+}
+
+// プロジェクト検索フィルター
+// ============================================================
+function filterTimerProjects(query) {
+  const sel = document.getElementById('timer-proj-sel');
+  if (!sel) return;
+  const q = (query || '').toLowerCase();
+  [...sel.options].forEach(opt => {
+    if (!opt.value) return; // placeholder は残す
+    opt.hidden = q ? !opt.text.toLowerCase().includes(q) : false;
+  });
+  // 現在選択中が隠れた場合はリセット
+  const current = sel.options[sel.selectedIndex];
+  if (current && current.hidden) sel.selectedIndex = 0;
+}
+
+// 時間記録削除
+// ============================================================
+function deleteTimeEntry(entryId) {
+  if (!confirm('この時間記録を削除しますか？')) return;
+  delete state.timeEntries[entryId];
+  scheduleSave();
+  closeModal();
+  renderPage();
+}
+function openTimeEntryDetailModal(entryId) {
+  const e = state.timeEntries[entryId];
+  if (!e) return;
+  const pname = projectName(e.projectId);
+  const projOptions = Object.values(state.projects).map(p =>
+    `<option value="${p.id}" ${p.id===e.projectId?'selected':''}>${escHtml(p.name||'(無題)')}</option>`
+  ).join('');
+  openModal(`
+    <div class="modal-title">時間記録の詳細・編集</div>
+    <div class="form-field"><label>プロジェクト</label><select id="ted-proj"><option value="">— 選択 —</option>${projOptions}</select></div>
+    <div class="form-row">
+      <div class="form-field"><label>開始時刻</label><input type="time" id="ted-start" value="${e.startTime||''}"></div>
+      <div class="form-field"><label>終了時刻</label><input type="time" id="ted-end" value="${e.endTime||''}"></div>
+    </div>
+    <div class="form-field"><label>日付</label><input type="date" id="ted-date" value="${e.date||''}"></div>
+    <div class="modal-footer" style="justify-content:space-between;">
+      <button class="btn btn-danger btn-sm" onclick="deleteTimeEntry('${entryId}')">🗑 削除</button>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-outline" onclick="closeModal()">閉じる</button>
+        <button class="btn btn-gold" onclick="submitEditTimeEntry('${entryId}')">保存</button>
+      </div>
+    </div>
+  `);
+}
+function submitEditTimeEntry(entryId) {
+  const e = state.timeEntries[entryId];
+  if (!e) return;
+  e.projectId = document.getElementById('ted-proj')?.value || e.projectId;
+  e.startTime = document.getElementById('ted-start')?.value || e.startTime;
+  e.endTime   = document.getElementById('ted-end')?.value || e.endTime;
+  e.date      = document.getElementById('ted-date')?.value || e.date;
+  scheduleSave();
+  closeModal();
+  renderPage();
+}
+
+// ============================================================
+// SALES PAGES
+// ============================================================
+function renderSalesMonthly() {
+  const y = salesMonth.y, m = salesMonth.m;
+  const monthLabel = `${y}年 ${m+1}月`;
+  const monthStr = `${y}-${String(m+1).padStart(2,'0')}`;
+
+  const monthSales = Object.values(state.sales).filter(s => (s.expectedDate||'').startsWith(monthStr) && isSaleCountable(s));
+  const effAmt = s => Math.round((Number(s.amount)||0) * getSaleMultiplier(s));
+  const total    = monthSales.reduce((acc,s) => acc + effAmt(s), 0);
+  const received = monthSales.filter(s => s.received).reduce((acc,s) => acc + effAmt(s), 0);
+  // 自己案件（スポット自分 + 顧問自分）のみ
+  const selfSales = monthSales.filter(s => isSelfSale(s));
+  const selfTotal    = selfSales.reduce((acc,s) => acc + effAmt(s), 0);
+  const selfReceived = selfSales.filter(s => s.received).reduce((acc,s) => acc + effAmt(s), 0);
+
+  // Group by project
+  const byProj = {};
+  monthSales.forEach(s => {
+    if (!byProj[s.projectId]) byProj[s.projectId] = [];
+    byProj[s.projectId].push(s);
+  });
+
+  let tableHtml = '';
+  Object.entries(byProj).forEach(([pid, sales]) => {
+    const pname = projectName(pid);
+    tableHtml += `
+      <tr style="background:var(--bg3);">
+        <td colspan="4" style="font-weight:700;cursor:pointer;color:var(--gold);" onclick="navigate('project','${pid}')">${escHtml(pname)}</td>
+      </tr>
+      ${sales.map(s => {
+        const mult = getSaleMultiplier(s);
+        const eff = effAmt(s);
+        const multBadge = mult < 1 ? `<span style="font-size:10px;color:var(--text3);margin-left:4px;">×${Math.round(mult*100)}%→${fmtMoney(eff)}</span>` : '';
+        return `<tr>
+          <td style="padding-left:20px;">${escHtml(s.saleType)}</td>
+          <td class="amount">${fmtMoney(s.amount)}${multBadge}</td>
+          <td>${fmtDate(s.expectedDate)}</td>
+          <td><span class="${s.received?'received-badge':'pending-badge'} sale-type-badge">${s.received?'受取済':'未受取'}</span></td>
+        </tr>`;
+      }).join('')}`;
+  });
+
+  const prevM = m === 0 ? { y: y-1, m: 11 } : { y, m: m-1 };
+  const nextM = m === 11 ? { y: y+1, m: 0 } : { y, m: m+1 };
+
+  return `
+  <div class="page-header"><h1 class="page-title">売上<span>（月間）</span></h1></div>
+  <div class="page-content">
+    <div class="month-nav">
+      <button class="btn btn-outline btn-sm" onclick="salesMonth={y:${prevM.y},m:${prevM.m}};renderPage()">◁ 前月</button>
+      <span class="month-label">${monthLabel}</span>
+      <button class="btn btn-outline btn-sm" onclick="salesMonth={y:${nextM.y},m:${nextM.m}};renderPage()">次月 ▷</button>
+    </div>
+    <div class="sales-summary">
+      <div class="summary-card" style="grid-column:1/-1;padding-bottom:6px;"><div class="label" style="font-size:11px;font-weight:700;color:var(--text2);">◆ 全合計（計上額）</div></div>
+      <div class="summary-card"><div class="label">合計</div><div class="value">${fmtMoney(total)}</div></div>
+      <div class="summary-card"><div class="label">受取済</div><div class="value" style="color:var(--green)">${fmtMoney(received)}</div></div>
+      <div class="summary-card"><div class="label">未受取</div><div class="value" style="color:var(--orange)">${fmtMoney(total-received)}</div></div>
+    </div>
+    <div class="sales-summary" style="margin-top:8px;">
+      <div class="summary-card" style="grid-column:1/-1;padding-bottom:6px;"><div class="label" style="font-size:11px;font-weight:700;color:var(--gold);">◆ 自己案件（スポット自分＋顧問自分）</div></div>
+      <div class="summary-card"><div class="label">合計</div><div class="value">${fmtMoney(selfTotal)}</div></div>
+      <div class="summary-card"><div class="label">受取済</div><div class="value" style="color:var(--green)">${fmtMoney(selfReceived)}</div></div>
+      <div class="summary-card"><div class="label">未受取</div><div class="value" style="color:var(--orange)">${fmtMoney(selfTotal-selfReceived)}</div></div>
+    </div>
+    ${monthSales.length ? `
+      <div class="card">
+        <table class="sales-table">
+          <thead><tr><th>費目</th><th>金額</th><th>受取予定日</th><th>状況</th></tr></thead>
+          <tbody>${tableHtml}</tbody>
+        </table>
+        <div class="sales-total">合計: ${fmtMoney(total)}</div>
+      </div>` : `<div class="empty-state"><div class="empty-icon">¥</div><p>この月の売上データはありません</p></div>`}
+    ${(() => {
+      // 顧問 時間単価
+      const komonorRows = Object.values(state.projects)
+        .filter(p => p.type === 'komonor')
+        .map(p => {
+          const salArr = Object.values(state.sales).filter(s => s.projectId === p.id && s.saleType === '顧問料' && (s.expectedDate||'').startsWith(monthStr));
+          const fee = salArr.reduce((s,x) => s + effAmt(x), 0);
+          const hours = calcHours(p.id, e => (e.date||'').startsWith(monthStr));
+          if (!fee && !hours) return '';
+          const rate = hourlyRate(fee, hours);
+          return `<tr><td style="cursor:pointer;color:var(--gold);" onclick="navigate('project','${p.id}')">${escHtml(p.name)}</td>
+            <td>${fmtHours(hours)}</td>
+            <td class="amount">${fmtMoney(fee)}</td>
+            <td class="amount" style="color:var(--gold);">${rate ? fmtMoney(rate)+'/h' : '—'}</td></tr>`;
+        }).filter(Boolean).join('');
+      // スポット 時間単価（当月に売上エントリがあるもの）
+      const spotRows = Object.values(state.projects)
+        .filter(p => p.type === 'spot')
+        .map(p => {
+          const salArr = Object.values(state.sales).filter(s => s.projectId === p.id && (s.expectedDate||'').startsWith(monthStr));
+          const fee = salArr.reduce((s,x) => s + effAmt(x), 0);
+          const hours = calcHours(p.id, null);
+          if (!fee && !hours) return '';
+          const rate = hourlyRate(fee, hours);
+          return `<tr><td style="cursor:pointer;color:var(--gold);" onclick="navigate('project','${p.id}')">${escHtml(p.name)}</td>
+            <td>${fmtHours(hours)}</td>
+            <td class="amount">${fmtMoney(fee)}</td>
+            <td class="amount" style="color:var(--gold);">${rate ? fmtMoney(rate)+'/h' : '—'}</td></tr>`;
+        }).filter(Boolean).join('');
+      const blocks = [];
+      if (komonorRows) blocks.push(`<div class="card" style="margin-top:14px;">
+        <div class="card-title">顧問 時間単価（${monthLabel}）</div>
+        <table class="sales-table"><thead><tr><th>プロジェクト</th><th>稼働時間</th><th>顧問料</th><th>時間単価</th></tr></thead>
+        <tbody>${komonorRows}</tbody></table></div>`);
+      if (spotRows) blocks.push(`<div class="card" style="margin-top:14px;">
+        <div class="card-title">スポット 時間単価（${monthLabel}）</div>
+        <table class="sales-table"><thead><tr><th>案件</th><th>稼働時間</th><th>売上（計上額）</th><th>時間単価</th></tr></thead>
+        <tbody>${spotRows}</tbody></table></div>`);
+      return blocks.join('');
+    })()}
+  </div>`;
+}
+// 将来月の顧問料見込み（state.sales未生成分）を月ごとに計算
+// selfOnly=true なら「自分」受任の顧問のみ
+function calcFutureKomonor(y, selfOnly = false) {
+  const today = new Date();
+  const curYM = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
+  const proj = {}; // "YYYY-MM" -> amount
+  Object.values(state.projects).forEach(p => {
+    if (p.type !== 'komonor') return;
+    if (selfOnly && p.acceptanceBackground === '他弁護士') return;
+    const contractYM = (p.contractDate || '').slice(0, 7);
+    const closedYM   = p.closedAt ? p.closedAt.slice(0, 7) : null;
+    for (let mi = 0; mi < 12; mi++) {
+      const ms = `${y}-${String(mi+1).padStart(2,'0')}`;
+      if (ms <= curYM) continue; // 当月以前は state.sales に存在
+      if (contractYM && ms < contractYM) continue;
+      if (closedYM && ms > closedYM) continue; // 終了月以降はスキップ
+      // state.sales に既存エントリがあればスキップ（重複カウント防止）
+      const rk = `komonor-fee-${p.id}-${ms}`;
+      if (Object.values(state.sales).some(s => s.recurringKey === rk)) continue;
+      const fee = getFeeForMonth(p, y, mi);
+      if (fee > 0) proj[ms] = (proj[ms] || 0) + fee;
+    }
+  });
+  return proj;
+}
+
+function renderSalesAnnual() {
+  const y = salesYear;
+  const today = new Date();
+  const curYM = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
+
+  const allSales = Object.values(state.sales);
+  const yearSales = allSales.filter(s => (s.expectedDate||'').startsWith(String(y)) && isSaleCountable(s));
+  const effAmt = s => Math.round((Number(s.amount)||0) * getSaleMultiplier(s));
+  const existTotal = yearSales.reduce((s,x) => s + effAmt(x), 0);
+  const received   = yearSales.filter(s => s.received).reduce((s,x) => s + effAmt(x), 0);
+  // 自己案件
+  const selfYearSales = yearSales.filter(s => isSelfSale(s));
+  const selfExistTotal = selfYearSales.reduce((s,x) => s + effAmt(x), 0);
+  const selfReceived   = selfYearSales.filter(s => s.received).reduce((s,x) => s + effAmt(x), 0);
+
+  // 将来の顧問料見込み
+  const futureKomonor = calcFutureKomonor(y);
+  const futureTotal = Object.values(futureKomonor).reduce((s,v) => s+v, 0);
+  const grandTotal = existTotal + futureTotal;
+  // 自己案件の将来見込み（他弁護士顧問を除く）
+  const selfFutureKomonor = calcFutureKomonor(y, true);
+  const selfFutureTotal = Object.values(selfFutureKomonor).reduce((s,v) => s+v, 0);
+
+  // Monthly breakdown (確定 + 見込み)
+  const monthly = Array.from({length:12}, (_,mi) => {
+    const ms = `${y}-${String(mi+1).padStart(2,'0')}`;
+    const mo = yearSales.filter(s => (s.expectedDate||'').startsWith(ms));
+    const existAmt   = mo.reduce((s,x) => s+effAmt(x), 0);
+    const recvAmt    = mo.filter(s=>s.received).reduce((s,x) => s+effAmt(x), 0);
+    const futureAmt  = futureKomonor[ms] || 0;
+    const isFuture   = ms > curYM;
+    return { month: mi+1, ms, existAmt, recvAmt, futureAmt, total: existAmt + futureAmt, isFuture };
+  });
+  const maxVal = Math.max(...monthly.map(m => m.total), 1);
+
+  const bars = monthly.map(m => {
+    const pctExist  = Math.round((m.existAmt  / maxVal) * 140);
+    const pctFuture = Math.round((m.futureAmt / maxVal) * 140);
+    const totalPct  = pctExist + pctFuture;
+    const label = m.total > 0 ? Math.round(m.total/10000)+'万' : '';
+    return `
+      <div class="chart-bar-wrap" title="${m.month}月: ${fmtMoney(m.total)}${m.futureAmt>0?' (見込み'+fmtMoney(m.futureAmt)+'含む)':''}">
+        <div class="chart-bar-val" style="${m.futureAmt>0?'color:var(--text2);':''}">${label}</div>
+        <div style="position:relative;width:28px;height:${totalPct}px;display:flex;flex-direction:column-reverse;">
+          ${pctExist  > 0 ? `<div style="height:${pctExist}px;background:var(--gold);border-radius:3px 3px 0 0;"></div>` : ''}
+          ${pctFuture > 0 ? `<div style="height:${pctFuture}px;background:rgba(201,168,76,.3);border:1px dashed var(--gold);box-sizing:border-box;border-radius:3px 3px 0 0;"></div>` : ''}
+        </div>
+        <div class="chart-bar-label">${m.month}月</div>
+      </div>`;
+  }).join('');
+
+  // 費目別（見込み分も加算）
+  const byType = {};
+  yearSales.forEach(s => { byType[s.saleType] = (byType[s.saleType]||0) + effAmt(s); });
+  if (futureTotal > 0) byType['顧問料（見込み）'] = (byType['顧問料（見込み）']||0) + futureTotal;
+  const typeBreakdown = Object.entries(byType).sort((a,b)=>b[1]-a[1]).map(([t,v]) =>
+    `<tr><td>${escHtml(t)}</td><td class="amount">${fmtMoney(v)}</td></tr>`
+  ).join('');
+
+  return `
+  <div class="page-header"><h1 class="page-title">売上<span>（年間）</span></h1></div>
+  <div class="page-content">
+    <div class="month-nav">
+      <button class="btn btn-outline btn-sm" onclick="salesYear--;renderPage()">◁ 前年</button>
+      <span class="month-label">${y}年</span>
+      <button class="btn btn-outline btn-sm" onclick="salesYear++;renderPage()">次年 ▷</button>
+    </div>
+    <div class="sales-summary">
+      <div class="summary-card" style="grid-column:1/-1;padding-bottom:6px;"><div class="label" style="font-size:11px;font-weight:700;color:var(--text2);">◆ 全合計（見込み含む）</div></div>
+      <div class="summary-card"><div class="label">合計</div><div class="value">${fmtMoney(grandTotal)}</div></div>
+      <div class="summary-card"><div class="label">受取済</div><div class="value" style="color:var(--green)">${fmtMoney(received)}</div></div>
+      <div class="summary-card"><div class="label">未受取・見込み</div><div class="value" style="color:var(--orange)">${fmtMoney(grandTotal-received)}</div></div>
+    </div>
+    <div class="sales-summary" style="margin-top:8px;">
+      <div class="summary-card" style="grid-column:1/-1;padding-bottom:6px;"><div class="label" style="font-size:11px;font-weight:700;color:var(--gold);">◆ 自己案件（スポット自分＋顧問自分）</div></div>
+      <div class="summary-card"><div class="label">合計（見込み含む）</div><div class="value">${fmtMoney(selfExistTotal + selfFutureTotal)}</div></div>
+      <div class="summary-card"><div class="label">受取済</div><div class="value" style="color:var(--green)">${fmtMoney(selfReceived)}</div></div>
+      <div class="summary-card"><div class="label">未受取・見込み</div><div class="value" style="color:var(--orange)">${fmtMoney(selfExistTotal + selfFutureTotal - selfReceived)}</div></div>
+    </div>
+    ${futureTotal > 0 ? `<div style="font-size:11px;color:var(--text3);margin:-8px 0 12px;padding:0 2px;">
+      ■ 確定: ${fmtMoney(existTotal)}　░ 顧問料見込み: ${fmtMoney(futureTotal)}
+    </div>` : ''}
+    <div class="annual-chart">
+      <div class="card-title">月別売上</div>
+      <div class="chart-bars">${bars}</div>
+    </div>
+    ${typeBreakdown ? `
+      <div class="card">
+        <div class="card-title">費目別内訳</div>
+        <table class="sales-table">
+          <thead><tr><th>費目</th><th>合計</th></tr></thead>
+          <tbody>${typeBreakdown}</tbody>
+        </table>
+      </div>` : ''}
+    <div class="card" style="margin-top:14px;">
+      <div class="card-title">月次明細</div>
+      <table class="sales-table">
+        <thead><tr><th>月</th><th>合計</th><th>受取済</th><th>未受取・見込み</th></tr></thead>
+        <tbody>${monthly.map(m=>`<tr style="${m.isFuture&&m.futureAmt>0?'color:var(--text2);':''}">
+          <td style="cursor:pointer;color:var(--gold)" onclick="salesMonth={y:${y},m:${m.month-1}};navigate('salesmonthly')">${m.month}月${m.futureAmt>0?' <span style="font-size:10px;color:var(--text3);">見込</span>':''}</td>
+          <td class="amount">${fmtMoney(m.total)}</td>
+          <td style="color:var(--green)">${fmtMoney(m.recvAmt)}</td>
+          <td style="color:var(--orange)">${fmtMoney(m.total-m.recvAmt)}</td>
+        </tr>`).join('')}</tbody>
+      </table>
+    </div>
+    ${(() => {
+      const yearStr = String(y);
+      // 顧問 時間単価
+      const komonorRows = Object.values(state.projects)
+        .filter(p => p.type === 'komonor')
+        .map(p => {
+          const salArr = Object.values(state.sales).filter(s => s.projectId === p.id && s.saleType === '顧問料' && (s.expectedDate||'').startsWith(yearStr));
+          const fee = salArr.reduce((s,x) => s+effAmt(x), 0);
+          const today2 = new Date();
+          const curYM2 = `${today2.getFullYear()}-${String(today2.getMonth()+1).padStart(2,'0')}`;
+          const contractYM = (p.contractDate||'').slice(0,7);
+          const closedYM = p.closedAt ? p.closedAt.slice(0,7) : null;
+          let projFutureFee = 0;
+          for (let mi = 0; mi < 12; mi++) {
+            const ms = `${y}-${String(mi+1).padStart(2,'0')}`;
+            if (ms <= curYM2) continue;
+            if (contractYM && ms < contractYM) continue;
+            if (closedYM && ms > closedYM) continue;
+            const rk = `komonor-fee-${p.id}-${ms}`;
+            if (Object.values(state.sales).some(s => s.recurringKey === rk)) continue;
+            projFutureFee += getFeeForMonth(p, y, mi);
+          }
+          // 顧問の計上率は getSaleMultiplier で反映済み (fee側)、見込みは単純加算
+          const totalFee = fee + Math.round(projFutureFee * getSaleMultiplier({projectId: p.id, amount: 1}) );
+          const hours = calcHours(p.id, e => (e.date||'').startsWith(yearStr));
+          if (!totalFee && !hours) return '';
+          const rate = hourlyRate(totalFee, hours);
+          return `<tr><td style="cursor:pointer;color:var(--gold);" onclick="navigate('project','${p.id}')">${escHtml(p.name)}</td>
+            <td>${fmtHours(hours)}</td>
+            <td class="amount">${fmtMoney(totalFee)}${projFutureFee>0?`<span style="font-size:10px;color:var(--text3);"> (見込含む)</span>`:''}</td>
+            <td class="amount" style="color:var(--gold);">${rate ? fmtMoney(rate)+'/h' : '—'}</td></tr>`;
+        }).filter(Boolean).join('');
+      // スポット 時間単価（当年に売上エントリがあるもの）
+      const spotRows = Object.values(state.projects)
+        .filter(p => p.type === 'spot')
+        .map(p => {
+          const salArr = Object.values(state.sales).filter(s => s.projectId === p.id && (s.expectedDate||'').startsWith(yearStr));
+          const fee = salArr.reduce((s,x) => s+effAmt(x), 0);
+          const hours = calcHours(p.id, null);
+          if (!fee && !hours) return '';
+          const rate = hourlyRate(fee, hours);
+          return `<tr><td style="cursor:pointer;color:var(--gold);" onclick="navigate('project','${p.id}')">${escHtml(p.name)}</td>
+            <td>${fmtHours(hours)}</td>
+            <td class="amount">${fmtMoney(fee)}</td>
+            <td class="amount" style="color:var(--gold);">${rate ? fmtMoney(rate)+'/h' : '—'}</td></tr>`;
+        }).filter(Boolean).join('');
+      const blocks = [];
+      if (komonorRows) blocks.push(`<div class="card" style="margin-top:14px;">
+        <div class="card-title">顧問 時間単価（${y}年）</div>
+        <table class="sales-table"><thead><tr><th>プロジェクト</th><th>稼働時間</th><th>顧問料</th><th>時間単価</th></tr></thead>
+        <tbody>${komonorRows}</tbody></table></div>`);
+      if (spotRows) blocks.push(`<div class="card" style="margin-top:14px;">
+        <div class="card-title">スポット 時間単価（${y}年）</div>
+        <table class="sales-table"><thead><tr><th>案件</th><th>稼働時間</th><th>売上（計上額）</th><th>時間単価</th></tr></thead>
+        <tbody>${spotRows}</tbody></table></div>`);
+      return blocks.join('');
+    })()}
+  </div>`;
+}
+
+// ============================================================
+// UNPAID PAGE
+// ============================================================
+function renderUnpaidPage() {
+  const today = todayStr();
+  const unpaid = Object.values(state.sales)
+    .filter(s => !s.received && s.expectedDate && s.expectedDate < today && isSaleCountable(s))
+    .sort((a, b) => a.expectedDate.localeCompare(b.expectedDate));
+
+  const totalUnpaid = unpaid.reduce((sum, s) => sum + (Number(s.amount) || 0), 0);
+
+  const rows = unpaid.map(s => {
+    const p = state.projects[s.projectId];
+    const projName = p ? escHtml(p.name || '(無題)') : '(削除済)';
+    const projLink = p
+      ? `<span style="color:var(--gold);cursor:pointer;" onclick="navigate('project','${s.projectId}')">${projName}</span>`
+      : `<span style="color:var(--text3);">${projName}</span>`;
+    const overDays = Math.floor((new Date(today) - new Date(s.expectedDate)) / 86400000);
+    const urgencyColor = overDays >= 30 ? '#e74c3c' : overDays >= 14 ? '#e67e22' : 'var(--text2)';
+    return `<tr>
+      <td>${projLink}</td>
+      <td>${escHtml(s.saleType || '')}</td>
+      <td style="text-align:right;">¥${Number(s.amount||0).toLocaleString()}</td>
+      <td style="color:${urgencyColor};font-weight:600;">${fmtDate(s.expectedDate)}</td>
+      <td style="color:${urgencyColor};font-size:12px;">${overDays}日超過</td>
+      <td><button class="btn btn-sm btn-outline" style="font-size:11px;" onclick="toggleSaleReceived('${s.id}')">受取済にする</button></td>
+    </tr>`;
+  }).join('');
+
+  return `<div class="page-content">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+      <h2 style="font-size:18px;font-weight:700;">⚠ 未収金</h2>
+      <span style="font-size:12px;color:var(--text3);">支払期日を過ぎた未回収の売上</span>
+    </div>
+    ${unpaid.length === 0
+      ? `<div class="card" style="text-align:center;padding:40px;color:var(--text3);">未収金はありません ✅</div>`
+      : `<div class="card" style="margin-bottom:16px;display:flex;gap:24px;align-items:center;">
+          <div>
+            <div style="font-size:11px;color:var(--text3);">未収件数</div>
+            <div style="font-size:22px;font-weight:700;color:#e74c3c;">${unpaid.length}件</div>
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--text3);">未収合計</div>
+            <div style="font-size:22px;font-weight:700;color:#e74c3c;">¥${totalUnpaid.toLocaleString()}</div>
+          </div>
+        </div>
+        <div class="card" style="padding:0;overflow:hidden;">
+          <table class="sales-table" style="width:100%;">
+            <thead><tr>
+              <th>プロジェクト</th><th>費目</th><th>金額</th><th>受取予定日</th><th>超過</th><th></th>
+            </tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>`
+    }
+  </div>`;
+}
+
+// ============================================================
+// RIGHT SIDEBAR
+// ============================================================
+function openRightSidebar(taskId) {
+  rightSbTaskId = taskId;
+  const t = state.tasks[taskId];
+  if (!t) return;
+  const p = state.projects[t.projectId];
+  document.getElementById('rsb-title').textContent = t.name;
+  document.getElementById('rsb-body').innerHTML = `
+    ${p ? `<button class="rsb-jump-btn" onclick="navigate('project','${t.projectId}');closeRightSidebar()">
+      🔗 ${escHtml(p.name||'(無題)')} を開く
+    </button>` : ''}
+    <div class="rsb-field"><label>タスク名</label>
+      <input id="rsb-name" value="${escHtml(t.name||'')}">
+    </div>
+    <div class="rsb-field"><label>依頼を受けた日</label>
+      <input type="date" id="rsb-req" value="${t.requestedAt||''}">
+    </div>
+    <div class="rsb-field"><label>完了期限</label>
+      <input type="date" id="rsb-due" value="${t.dueDate||''}">
+    </div>
+    <div class="rsb-field"><label>見込み時間（分）</label>
+      <input type="number" id="rsb-est" value="${t.estimatedMinutes||''}">
+    </div>
+    <div style="display:flex;gap:8px;margin-top:16px;">
+      <button class="btn btn-gold btn-sm flex-1" onclick="saveRightSidebar()">保存</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteTask('${taskId}')">削除</button>
+    </div>
+    ${t.completed ? `<div style="margin-top:12px;font-size:12px;color:var(--green);">✓ 完了済み: ${fmtDate(t.completedAt)}</div>` : `
+      <button class="btn btn-outline btn-sm w-full" style="margin-top:10px;" onclick="completeTask('${taskId}')">✓ 完了にする</button>
+    `}
+  `;
+  document.getElementById('right-sb').classList.add('open');
+}
+function saveRightSidebar() {
+  const t = state.tasks[rightSbTaskId];
+  if (!t) return;
+  t.name = document.getElementById('rsb-name')?.value || t.name;
+  t.requestedAt = document.getElementById('rsb-req')?.value || '';
+  t.dueDate = document.getElementById('rsb-due')?.value || '';
+  t.estimatedMinutes = Number(document.getElementById('rsb-est')?.value || 0);
+  document.getElementById('rsb-title').textContent = t.name;
+  scheduleSave();
+  renderPage();
+}
+function closeRightSidebar() {
+  document.getElementById('right-sb').classList.remove('open');
+  rightSbTaskId = null;
+}
+function deleteTask(id) {
+  if (!confirm('このタスクを削除しますか？')) return;
+  delete state.tasks[id];
+  scheduleSave();
+  closeRightSidebar();
+  renderPage();
+}
+
+// ============================================================
+// MODAL
+// ============================================================
+function openModal(html) {
+  document.getElementById('modal-box').innerHTML = html;
+  document.getElementById('modal-overlay').classList.remove('hidden');
+}
+function closeModal() {
+  document.getElementById('modal-overlay').classList.add('hidden');
+  document.getElementById('modal-box').innerHTML = '';
+}
+function closeModalOnOverlay(e) {
+  if (e.target === document.getElementById('modal-overlay')) closeModal();
+}
+
+// ============================================================
+// PAGE EVENTS (after render)
+// ============================================================
+function setupPageEvents() {
+  if (currentPage === 'tasklist') setTimeout(setupSortable, 100);
+  if (currentPage === 'project') setTimeout(setupProjectSortable, 100);
+}
+function setupProjectSortable() {
+  const container = document.getElementById('proj-task-list');
+  if (!container || typeof Sortable === 'undefined') return;
+  sortables.forEach(s => { try { s.destroy(); } catch(e){} });
+  sortables = [];
+  const s = Sortable.create(container, {
+    animation: 150,
+    handle: '.task-drag-handle',
+    filter: '.add-task-btn',
+    onEnd: () => {
+      const ids = [...container.querySelectorAll('[data-task-id]')].map(el => el.dataset.taskId);
+      ids.forEach((id, i) => { if (state.tasks[id]) state.tasks[id].order = i; });
+      scheduleSave();
+    }
+  });
+  sortables.push(s);
+}
+
+// ============================================================
+// KEYBOARD
+// ============================================================
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    closeModal();
+    closeRightSidebar();
+  }
+});
+
+// ============================================================
+// INIT
+// ============================================================
+window.addEventListener('DOMContentLoaded', () => {
+  const savedKey = localStorage.getItem(JB_KEY_STORE);
+  const savedBin = localStorage.getItem(JB_BIN_STORE);
+  if (savedKey) {
+    jbKey   = savedKey;
+    jbBinId = savedBin || '';
+    // 暗号化が有効な場合、パスワードはメモリにないのでloadFromJSONBin内で検出される
+    startApp();
+  } else {
+    document.getElementById('setup-overlay').classList.remove('hidden');
+  }
+  // Restore sidebar state
+  loadLocal();
+  if (state.settings && !state.settings.sidebarOpen) {
+    const sb = document.getElementById('sidebar');
+    const btn = document.getElementById('expand-btn');
+    if (sb) sb.classList.add('collapsed');
+    if (btn) btn.classList.remove('hidden');
+  }
+});
+
+// Mobile overlay click
+document.addEventListener('click', e => {
+  const sb = document.getElementById('sidebar');
+  if (window.innerWidth <= 768 && sb?.classList.contains('mobile-open')) {
+    if (!sb.contains(e.target) && !e.target.classList.contains('menu-btn')) {
+      sb.classList.remove('mobile-open');
+    }
+  }
+});
+</script>
+</body>
+</html>
