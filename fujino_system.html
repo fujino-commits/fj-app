@@ -327,12 +327,12 @@ label{display:block;font-size:12px;color:var(--text2);margin-bottom:4px;}
           if(!a){document.getElementById('enc-pw-error').textContent='答えを入力してください';return;}
           const data=await recoverFromSecret(a);
           if(!data){document.getElementById('enc-pw-error').textContent='答えが違います';return;}
-          jbKey=data.apiKey||jbKey;
-          jbBinId=data.binId||jbBinId;
+          gistToken=data.gistToken||gistToken;
+          gistId=data.gistId||gistId;
           encPassword=data.encPw||'';
           recoveryAnswer=a;
-          localStorage.setItem('fujino_jb_key',jbKey);
-          localStorage.setItem('fujino_jb_bin',jbBinId);
+          localStorage.setItem('fujino_gist_token',gistToken);
+          localStorage.setItem('fujino_gist_id',gistId);
           document.getElementById('enc-pw-overlay').classList.add('hidden');
           finishStartApp();
         })()">回復</button>
@@ -341,27 +341,31 @@ label{display:block;font-size:12px;color:var(--text2);margin-bottom:4px;}
   </div>
 </div>
 
-<!-- JSONBin Setup -->
+<!-- GitHub Gist Setup -->
 <div id="setup-overlay">
   <div class="setup-card">
     <h1>⚖ 藤野晃司完全管理システム</h1>
-    <p>クラウド同期のため <strong>JSONBin.io</strong> の設定が必要です（完全無料）。<br><br>
+    <p>クラウド同期のため <strong>GitHub Token</strong> の設定が必要です（無料）。<br><br>
       <strong>手順：</strong><br>
-      ① <a href="https://jsonbin.io/" target="_blank">jsonbin.io</a> にアクセスしてアカウント作成<br>
-      ② ログイン後、右上メニュー → <strong>API Keys</strong><br>
-      ③ 「Secret Access Key」をコピーして下に貼り付け
+      ① <a href="https://github.com/settings/tokens/new" target="_blank">github.com/settings/tokens/new</a> にアクセス<br>
+      ② Note に名前を入力し、「<strong>gist</strong>」にチェックを入れる<br>
+      ③「Generate token」で表示されたトークン（ghp_...）を下に貼り付け
     </p>
     <div class="form-field">
-      <label>Secret Access Key</label>
-      <input id="jb-key" placeholder="$2a$10$..." type="password">
+      <label>GitHub Token</label>
+      <input id="gh-token" placeholder="ghp_..." type="password">
+    </div>
+    <div class="form-field" style="margin-top:12px;">
+      <label>Gist ID <span style="font-size:11px;color:var(--text3);">（別デバイスと共有する場合のみ入力・通常は空欄）</span></label>
+      <input id="gh-gist-id" placeholder="空欄=自動作成" type="text" style="font-family:monospace;">
     </div>
     <div class="form-field" style="margin-top:12px;">
       <label>暗号化パスワード <span style="font-size:11px;color:var(--text3);">（推奨・任意）</span></label>
-      <input id="jb-enc-pw" placeholder="JSONBinに送るデータを暗号化するパスワード" type="password">
+      <input id="jb-enc-pw" placeholder="Gistに送るデータを暗号化するパスワード" type="password">
       <p class="hint" style="margin-top:4px;">設定するとクラウドに保存されるデータがAES-256で暗号化されます。忘れると復号できないため注意。</p>
     </div>
     <div style="display:flex;gap:10px;margin-top:8px;">
-      <button class="btn btn-gold" onclick="submitJSONBinConfig()">設定して開始</button>
+      <button class="btn btn-gold" onclick="submitGistConfig()">設定して開始</button>
       <button class="btn btn-outline" onclick="startWithoutCloud()">このPCのみで使用</button>
     </div>
     <p class="hint">※ 設定は後から変更できます。「このPCのみ」を選んだ場合、データはこのブラウザのみに保存されます。</p>
@@ -384,6 +388,9 @@ label{display:block;font-size:12px;color:var(--text2);margin-bottom:4px;}
         <div class="sidebar-subtitle">Lawyer Management <span id="sync-badge" style="font-size:10px;margin-left:4px;"></span></div>
         <div style="margin-top:6px;">
           <button class="btn btn-outline btn-sm" style="font-size:10px;padding:3px 8px;" onclick="openApiKeyModal()">⚙ API設定確認</button>
+          <button class="btn btn-outline btn-sm" style="font-size:10px;padding:3px 8px;margin-top:4px;" onclick="exportData()">📤 データ書き出し</button>
+          <button class="btn btn-outline btn-sm" style="font-size:10px;padding:3px 8px;margin-top:4px;" onclick="document.getElementById('import-file-input').click()">📥 データ読み込み</button>
+          <input id="import-file-input" type="file" accept=".json" style="display:none;" onchange="importData(this)">
         </div>
         <button class="collapse-btn" onclick="toggleSidebar()" title="サイドバーを閉じる">◁</button>
       </div>
@@ -473,16 +480,16 @@ let showClosedProjects = false;
 let sidebarSearch = '';
 
 // ============================================================
-// PERSISTENCE & JSONBIN.IO SYNC
+// PERSISTENCE & GITHUB GIST SYNC
 // ============================================================
-const JB_KEY_STORE = 'fujino_jb_key';
-const JB_BIN_STORE = 'fujino_jb_bin';
+const GIST_TOKEN_STORE = 'fujino_gist_token';
+const GIST_ID_STORE    = 'fujino_gist_id';
 const JB_ENC_FLAG = 'fujino_enc_enabled'; // '1' if encryption is active
 const RECOVERY_STORE = 'fujino_recovery';  // encrypted recovery blob
 const RECOVERY_Q = '母方の祖父の苗字（漢字）は？';
-const JB_BASE = 'https://api.jsonbin.io/v3';
-let jbKey = '';
-let jbBinId = '';
+const GIST_BASE = 'https://api.github.com';
+let gistToken = '';
+let gistId = '';
 let encPassword = ''; // in-memory only, not persisted
 let recoveryAnswer = ''; // in-memory only
 
@@ -513,7 +520,7 @@ async function encryptPayload(obj, password) {
 // 秘密の質問による回復データ保存
 async function saveRecoveryData() {
   if (!recoveryAnswer) return;
-  const data = { apiKey: jbKey, encPw: encPassword, binId: jbBinId };
+  const data = { gistToken, encPw: encPassword, gistId };
   const blob = await encryptPayload(data, recoveryAnswer);
   localStorage.setItem(RECOVERY_STORE, JSON.stringify(blob));
 }
@@ -546,13 +553,13 @@ function loadLocal() {
 }
 function scheduleSave() {
   saveLocal();
-  if (jbKey && jbKey !== 'none') {
+  if (gistToken && gistToken !== 'none') {
     clearTimeout(saveTimeout);
-    saveTimeout = setTimeout(syncToJSONBin, 1000);
+    saveTimeout = setTimeout(syncToGist, 1000);
   }
 }
-async function syncToJSONBin() {
-  if (!jbKey || jbKey === 'none') return;
+async function syncToGist() {
+  if (!gistToken || gistToken === 'none') return;
   const raw = {
     projects: state.projects, tasks: state.tasks, sales: state.sales,
     timeEntries: state.timeEntries, taskOrder: state.taskOrder,
@@ -560,97 +567,140 @@ async function syncToJSONBin() {
     updatedAt: new Date().toISOString()
   };
   try {
-    // 暗号化パスワードが設定されていれば暗号化
     const payload = encPassword ? await encryptPayload(raw, encPassword) : raw;
     if (encPassword) localStorage.setItem(JB_ENC_FLAG, '1');
-    if (jbBinId) {
-      await fetch(`${JB_BASE}/b/${jbBinId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'X-Access-Key': jbKey },
-        body: JSON.stringify(payload)
+    const content = JSON.stringify(payload);
+    const headers = { 'Authorization': `Bearer ${gistToken}`, 'Content-Type': 'application/json' };
+    if (gistId) {
+      await fetch(`${GIST_BASE}/gists/${gistId}`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({ files: { 'data.json': { content } } })
       });
     } else {
-      const res = await fetch(`${JB_BASE}/b`, {
+      const res = await fetch(`${GIST_BASE}/gists`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Access-Key': jbKey,
-          'X-Bin-Name': '藤野晃司管理システム',
-          'X-Bin-Private': 'true'
-        },
-        body: JSON.stringify(payload)
+        headers,
+        body: JSON.stringify({ description: '藤野晃司管理システム', public: false, files: { 'data.json': { content } } })
       });
       const json = await res.json();
-      if (json.metadata?.id) {
-        jbBinId = json.metadata.id;
-        localStorage.setItem(JB_BIN_STORE, jbBinId);
+      if (json.id) {
+        gistId = json.id;
+        localStorage.setItem(GIST_ID_STORE, gistId);
+      } else {
+        showSyncBadge('⚠ ' + (json.message || 'Gist作成失敗'), true);
+        console.warn('[Gist error]', json);
+        return;
       }
     }
     showSyncBadge('✓ 同期済み', false);
-  } catch(e) { showSyncBadge('⚠ 同期失敗', true); }
+  } catch(e) { showSyncBadge('⚠ 同期失敗: ' + e.message, true); }
 }
-async function loadFromJSONBin() {
-  if (!jbKey || jbKey === 'none' || !jbBinId) return false;
+async function loadFromGist() {
+  if (!gistToken || gistToken === 'none' || !gistId) return false;
   try {
-    const res = await fetch(`${JB_BASE}/b/${jbBinId}/latest`, {
-      headers: { 'X-Access-Key': jbKey }
+    const res = await fetch(`${GIST_BASE}/gists/${gistId}`, {
+      headers: { 'Authorization': `Bearer ${gistToken}` }
     });
     const json = await res.json();
-    let d = json.record;
-    if (d) {
-      if (d._enc) {
-        // 暗号化データ
-        if (!encPassword) return 'encrypted'; // パスワード未入力を呼び出し元に通知
-        try {
-          d = await decryptPayload(d, encPassword);
-        } catch(e) {
-          return 'wrong_password';
-        }
+    const file = json.files && json.files['data.json'];
+    if (!file) return false;
+    let d = JSON.parse(file.content);
+    if (d._enc) {
+      if (!encPassword) return 'encrypted';
+      try {
+        d = await decryptPayload(d, encPassword);
+      } catch(e) {
+        return 'wrong_password';
       }
-      state.projects    = d.projects    || {};
-      state.tasks       = d.tasks       || {};
-      state.sales       = d.sales       || {};
-      state.timeEntries = d.timeEntries || {};
-      state.taskOrder   = d.taskOrder   || {};
-      state.settings    = d.settings    || { sidebarOpen: true };
-      state.activeTimer = d.activeTimer || null;
-      saveLocal();
-      return true;
     }
-  } catch(e) { console.warn('JSONBin load error:', e); }
+    state.projects    = d.projects    || {};
+    state.tasks       = d.tasks       || {};
+    state.sales       = d.sales       || {};
+    state.timeEntries = d.timeEntries || {};
+    state.taskOrder   = d.taskOrder   || {};
+    state.settings    = d.settings    || { sidebarOpen: true };
+    state.activeTimer = d.activeTimer || null;
+    saveLocal();
+    return true;
+  } catch(e) { console.warn('Gist load error:', e); }
   return false;
 }
+function exportData() {
+  const data = {
+    state: JSON.parse(localStorage.getItem('fujino_state') || '{}'),
+    gistToken: localStorage.getItem('fujino_gist_token') || '',
+    gistId: localStorage.getItem('fujino_gist_id') || '',
+    encFlag: localStorage.getItem('fujino_enc_enabled') || '',
+    recovery: localStorage.getItem('fujino_recovery') || '',
+    exportedAt: new Date().toISOString()
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `fujino_backup_${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+}
+function importData(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (!confirm('現在のデータを上書きしてインポートしますか？')) return;
+      if (data.state) localStorage.setItem('fujino_state', JSON.stringify(data.state));
+      if (data.gistToken) localStorage.setItem('fujino_gist_token', data.gistToken);
+      if (data.gistId) localStorage.setItem('fujino_gist_id', data.gistId);
+      if (data.encFlag) localStorage.setItem('fujino_enc_enabled', data.encFlag);
+      if (data.recovery) localStorage.setItem('fujino_recovery', data.recovery);
+      alert('インポート完了！ページを再読み込みします。');
+      location.reload();
+    } catch(err) {
+      alert('ファイルの読み込みに失敗しました。');
+    }
+  };
+  reader.readAsText(file);
+  input.value = '';
+}
 function openApiKeyModal() {
-  const key = localStorage.getItem('fujino_jb_key') || '（未設定）';
-  const binId = localStorage.getItem('fujino_jb_bin') || '（未設定）';
+  const token = localStorage.getItem('fujino_gist_token') || '（未設定）';
+  const gId = localStorage.getItem('fujino_gist_id') || '（未設定）';
   const encEnabled = localStorage.getItem('fujino_enc_enabled') === '1';
   const encPwStatus = encEnabled
     ? (encPassword ? `設定済み（セッション中）` : `設定済み（要再入力）`)
     : '未設定';
   openModal(`
-    <div class="modal-title">⚙ API・暗号化設定</div>
+    <div class="modal-title">⚙ クラウド・暗号化設定</div>
     <div class="form-field">
-      <label>JSONBin Secret Access Key</label>
+      <label>GitHub Token（Gist権限）</label>
       <div style="display:flex;gap:8px;align-items:center;">
-        <input id="apikey-display" type="password" value="${escHtml(key)}" readonly style="flex:1;font-family:monospace;font-size:12px;">
+        <input id="apikey-display" type="password" value="${escHtml(token === '（未設定）' ? '' : token)}" placeholder="ghp_..." style="flex:1;font-family:monospace;font-size:12px;">
         <button class="btn btn-outline btn-sm" onclick="
           const inp=document.getElementById('apikey-display');
           inp.type=inp.type==='password'?'text':'password';
           this.textContent=inp.type==='password'?'表示':'隠す';
         ">表示</button>
       </div>
+      <button class="btn btn-sm btn-gold" style="margin-top:6px;" onclick="(()=>{
+        const v=document.getElementById('apikey-display').value.trim();
+        if(!v){alert('トークンを入力してください');return;}
+        gistToken=v;
+        localStorage.setItem('fujino_gist_token',v);
+        alert('トークンを保存しました');
+      })()">トークンを保存</button>
     </div>
     <div class="form-field">
-      <label>Bin ID <span style="font-size:10px;color:var(--text3);">（初回同期時に自動設定）</span></label>
+      <label>Gist ID <span style="font-size:10px;color:var(--text3);">（初回同期時に自動設定）</span></label>
       <div style="display:flex;gap:8px;align-items:center;">
-        <input id="binid-input" type="text" value="${escHtml(binId === '（未設定）' ? '' : binId)}" placeholder="空欄=自動作成" style="font-family:monospace;font-size:12px;flex:1;">
+        <input id="gistid-input" type="text" value="${escHtml(gId === '（未設定）' ? '' : gId)}" placeholder="空欄=自動作成" style="font-family:monospace;font-size:12px;flex:1;">
         <button class="btn btn-outline btn-sm" onclick="(()=>{
-          const v=document.getElementById('binid-input').value.trim();
-          if(v){jbBinId=v;localStorage.setItem('fujino_jb_bin',v);alert('Bin IDを設定しました。');}
-          else{jbBinId='';localStorage.removeItem('fujino_jb_bin');alert('Bin IDをクリアしました。次回同期時に新規作成されます。');}
+          const v=document.getElementById('gistid-input').value.trim();
+          if(v){gistId=v;localStorage.setItem('fujino_gist_id',v);alert('Gist IDを設定しました。');}
+          else{gistId='';localStorage.removeItem('fujino_gist_id');alert('Gist IDをクリアしました。次回同期時に新規作成されます。');}
         })()">保存</button>
       </div>
-      <div style="font-size:11px;color:var(--text3);margin-top:4px;">他のデバイスで同じデータを使う場合はこのIDを入力してください</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:4px;">別デバイスで同じデータを使う場合はこのIDを入力してください</div>
     </div>
     <div class="form-field">
       <label>暗号化パスワード</label>
@@ -690,10 +740,35 @@ function openApiKeyModal() {
         openApiKeyModal();
       })()">回復データを保存</button>
     </div>
-    <div class="modal-footer">
+    <div class="modal-footer" style="flex-wrap:wrap;gap:8px;">
+      <button class="btn btn-gold btn-sm" onclick="(async()=>{
+        if(!gistToken||gistToken==='none'){alert('GitHubトークンが設定されていません');return;}
+        const el=document.getElementById('sync-test-result');
+        el.textContent='接続確認中...'; el.style.color='var(--text2)';
+        try{
+          const res = await fetch('https://api.github.com/gists', {
+            method:'POST',
+            headers:{'Authorization':'Bearer '+gistToken,'Content-Type':'application/json'},
+            body: JSON.stringify({description:'藤野テスト',public:false,files:{'test.txt':{content:'ok'}}})
+          });
+          const json = await res.json();
+          if(json.id){
+            fetch('https://api.github.com/gists/'+json.id,{method:'DELETE',headers:{'Authorization':'Bearer '+gistToken}});
+            el.textContent='✅ 接続成功！トークンは有効です';
+            el.style.color='var(--green)';
+          } else {
+            el.textContent='❌ エラー: '+(json.message||JSON.stringify(json));
+            el.style.color='var(--red)';
+          }
+        }catch(e){
+          el.textContent='❌ 接続失敗: '+e.message;
+          el.style.color='var(--red)';
+        }
+      })()">今すぐ同期テスト</button>
       <button class="btn btn-outline" onclick="closeModal()">閉じる</button>
-      <button class="btn btn-danger btn-sm" onclick="if(confirm('API設定をリセットして再設定画面に戻しますか？')){localStorage.removeItem('fujino_jb_key');localStorage.removeItem('fujino_jb_bin');localStorage.removeItem('fujino_enc_enabled');location.reload();}">設定リセット</button>
+      <button class="btn btn-danger btn-sm" onclick="if(confirm('クラウド設定をリセットして再設定画面に戻しますか？')){localStorage.removeItem('fujino_gist_token');localStorage.removeItem('fujino_gist_id');localStorage.removeItem('fujino_enc_enabled');location.reload();}">設定リセット</button>
     </div>
+    <div id="sync-test-result" style="font-size:12px;margin-top:6px;"></div>
   `);
 }
 function showSyncBadge(msg, isError) {
@@ -705,11 +780,13 @@ function showSyncBadge(msg, isError) {
   el._t = setTimeout(() => { el.textContent = ''; }, 3000);
 }
 
-function submitJSONBinConfig() {
-  const key = (document.getElementById('jb-key')?.value || '').trim();
-  if (!key) { alert('Secret Access Keyを入力してください'); return; }
-  jbKey = key;
-  localStorage.setItem(JB_KEY_STORE, key);
+function submitGistConfig() {
+  const token = (document.getElementById('gh-token')?.value || '').trim();
+  if (!token) { alert('GitHub Tokenを入力してください'); return; }
+  gistToken = token;
+  localStorage.setItem(GIST_TOKEN_STORE, token);
+  const gid = (document.getElementById('gh-gist-id')?.value || '').trim();
+  if (gid) { gistId = gid; localStorage.setItem(GIST_ID_STORE, gid); }
   const pw = (document.getElementById('jb-enc-pw')?.value || '').trim();
   if (pw) {
     encPassword = pw;
@@ -718,8 +795,8 @@ function submitJSONBinConfig() {
   startApp();
 }
 function startWithoutCloud() {
-  jbKey = 'none';
-  localStorage.setItem(JB_KEY_STORE, 'none');
+  gistToken = 'none';
+  localStorage.setItem(GIST_TOKEN_STORE, 'none');
   startApp();
 }
 // 暗号化パスワード再入力モーダル
@@ -733,7 +810,7 @@ async function submitEncPw() {
   const pw = (document.getElementById('enc-pw-input')?.value || '').trim();
   if (!pw) { document.getElementById('enc-pw-error').textContent = 'パスワードを入力してください'; return; }
   encPassword = pw;
-  const result = await loadFromJSONBin();
+  const result = await loadFromGist();
   if (result === 'wrong_password') {
     encPassword = '';
     document.getElementById('enc-pw-error').textContent = 'パスワードが違います。再度入力してください。';
@@ -752,17 +829,17 @@ async function startApp() {
   document.getElementById('setup-overlay').classList.add('hidden');
   document.getElementById('app').classList.remove('hidden');
   loadLocal();
-  if (jbKey && jbKey !== 'none') {
-    if (jbBinId) {
-      const result = await loadFromJSONBin();
+  if (gistToken && gistToken !== 'none') {
+    if (gistId) {
+      const result = await loadFromGist();
       if (result === 'encrypted') {
         // パスワード未入力だが暗号化データあり → 再入力モーダル表示
         showEncPwOverlay();
         return; // finishStartApp は submitEncPw で呼ばれる
       }
     } else {
-      // 初回: ローカルデータをクラウドに保存
-      await syncToJSONBin();
+      // 初回: ローカルデータをGistに保存
+      await syncToGist();
     }
   }
   finishStartApp();
@@ -3030,12 +3107,11 @@ document.addEventListener('keydown', e => {
 // INIT
 // ============================================================
 window.addEventListener('DOMContentLoaded', () => {
-  const savedKey = localStorage.getItem(JB_KEY_STORE);
-  const savedBin = localStorage.getItem(JB_BIN_STORE);
-  if (savedKey) {
-    jbKey   = savedKey;
-    jbBinId = savedBin || '';
-    // 暗号化が有効な場合、パスワードはメモリにないのでloadFromJSONBin内で検出される
+  const savedToken = localStorage.getItem(GIST_TOKEN_STORE);
+  const savedGistId = localStorage.getItem(GIST_ID_STORE);
+  if (savedToken) {
+    gistToken = savedToken;
+    gistId    = savedGistId || '';
     startApp();
   } else {
     document.getElementById('setup-overlay').classList.remove('hidden');
