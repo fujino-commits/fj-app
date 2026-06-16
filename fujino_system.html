@@ -995,6 +995,12 @@ function isSaleCountable(sale) {
   if (p.type === 'spot' && !p.closedAt) return false; // 未完了スポットは除外
   return true;
 }
+// 売上の計上月を返す（スポットは案件終了日の月、それ以外はexpectedDate）
+function getSaleAccountDate(sale) {
+  const p = state.projects[sale.projectId];
+  if (p && p.type === 'spot' && p.closedAt) return p.closedAt;
+  return sale.expectedDate || '';
+}
 // 自己案件判定（スポット自分 or 顧問自分）
 function isSelfSale(sale) {
   const p = state.projects[sale.projectId];
@@ -1715,7 +1721,7 @@ function submitNewProject() {
   if (newProjType === 'komonor') {
     const fee = Number(document.getElementById('np-fee')?.value || 0);
     const contractDate = document.getElementById('np-contractDate')?.value || '';
-    if (!fee) { alert('月額顧問料を入力してください'); return; }
+    if (fee == null || fee === '' || isNaN(fee)) { alert('月額顧問料を入力してください'); return; }
     if (!contractDate) { alert('契約日を入力してください'); return; }
     const komonorBgRaw = document.querySelector('input[name="np-komonor-bgtype"]:checked')?.value || '自分';
     const komonorBg = komonorBgRaw === 'other' ? 'その他' : komonorBgRaw;
@@ -2443,7 +2449,13 @@ function submitAddSale(projectId) {
     saleType = typeEl?.value || '';
   }
   const amount = Number(document.getElementById('as-amount')?.value || 0);
-  const expectedDate = document.getElementById('as-date')?.value || '';
+  let expectedDate = document.getElementById('as-date')?.value || '';
+  // スポット案件（終了済み）は必ず終了月末を計上日にする
+  const _sp = state.projects[projectId];
+  if (_sp && _sp.type === 'spot' && _sp.closedAt) {
+    const _d = new Date(_sp.closedAt);
+    expectedDate = lastDayOfMonth(_d.getFullYear(), _d.getMonth());
+  }
   const s = { id: genId(), projectId, saleType, amount, expectedDate, received: false, receivedDate: '' };
   state.sales[s.id] = s;
   scheduleSave();
@@ -2485,7 +2497,7 @@ function submitFeeChange(projectId) {
   if (!p) return;
   const fee = Number(document.getElementById('fc-fee')?.value || 0);
   const startYM = document.getElementById('fc-start')?.value || ''; // "YYYY-MM"
-  if (!fee || !startYM) { alert('金額と適用開始月を入力してください'); return; }
+  if (fee == null || isNaN(fee) || !startYM) { alert('適用開始月を入力してください'); return; }
   if (!p.feeHistory) p.feeHistory = [];
   // feeHistory は "YYYY-MM" で統一保存
   p.feeHistory.push({ amount: fee, startDate: startYM });
@@ -2545,7 +2557,14 @@ function submitEditSaleModal(saleId) {
   }
   if (isKomonorFee && amount !== s.amount) s.manuallyEdited = true;
   s.amount = amount;
-  s.expectedDate = document.getElementById('esm-date')?.value || s.expectedDate;
+  // スポット案件（終了済み）は編集でも終了月末を維持
+  const _sp2 = state.projects[s.projectId];
+  if (_sp2 && _sp2.type === 'spot' && _sp2.closedAt) {
+    const _d2 = new Date(_sp2.closedAt);
+    s.expectedDate = lastDayOfMonth(_d2.getFullYear(), _d2.getMonth());
+  } else {
+    s.expectedDate = document.getElementById('esm-date')?.value || s.expectedDate;
+  }
   scheduleSave();
   closeModal();
   renderPage();
@@ -2636,7 +2655,7 @@ function renderSalesMonthly() {
   const monthLabel = `${y}年 ${m+1}月`;
   const monthStr = `${y}-${String(m+1).padStart(2,'0')}`;
 
-  const monthSales = Object.values(state.sales).filter(s => (s.expectedDate||'').startsWith(monthStr) && isSaleCountable(s));
+  const monthSales = Object.values(state.sales).filter(s => getSaleAccountDate(s).startsWith(monthStr) && isSaleCountable(s));
   const effAmt = s => Math.round((Number(s.amount)||0) * getSaleMultiplier(s));
   const total    = monthSales.reduce((acc,s) => acc + effAmt(s), 0);
   const received = monthSales.filter(s => s.received).reduce((acc,s) => acc + effAmt(s), 0);
@@ -2718,11 +2737,11 @@ function renderSalesMonthly() {
             <td class="amount">${fmtMoney(fee)}</td>
             <td class="amount" style="color:var(--gold);">${rate ? fmtMoney(rate)+'/h' : '—'}</td></tr>`;
         }).filter(Boolean).join('');
-      // スポット 時間単価（当月に売上エントリがあるもの）
+      // スポット 時間単価（当月に売上エントリがあるもの・案件完了済みのみ）
       const spotRows = Object.values(state.projects)
-        .filter(p => p.type === 'spot')
+        .filter(p => p.type === 'spot' && p.closedAt)
         .map(p => {
-          const salArr = Object.values(state.sales).filter(s => s.projectId === p.id && (s.expectedDate||'').startsWith(monthStr));
+          const salArr = Object.values(state.sales).filter(s => s.projectId === p.id && getSaleAccountDate(s).startsWith(monthStr) && isSaleCountable(s));
           const fee = salArr.reduce((s,x) => s + effAmt(x), 0);
           const hours = calcHours(p.id, null);
           if (!fee && !hours) return '';
@@ -2777,7 +2796,7 @@ function renderSalesAnnual() {
   const curYM = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
 
   const allSales = Object.values(state.sales);
-  const yearSales = allSales.filter(s => (s.expectedDate||'').startsWith(String(y)) && isSaleCountable(s));
+  const yearSales = allSales.filter(s => getSaleAccountDate(s).startsWith(String(y)) && isSaleCountable(s));
   const effAmt = s => Math.round((Number(s.amount)||0) * getSaleMultiplier(s));
   const existTotal = yearSales.reduce((s,x) => s + effAmt(x), 0);
   const received   = yearSales.filter(s => s.received).reduce((s,x) => s + effAmt(x), 0);
@@ -2797,7 +2816,7 @@ function renderSalesAnnual() {
   // Monthly breakdown (確定 + 見込み)
   const monthly = Array.from({length:12}, (_,mi) => {
     const ms = `${y}-${String(mi+1).padStart(2,'0')}`;
-    const mo = yearSales.filter(s => (s.expectedDate||'').startsWith(ms));
+    const mo = yearSales.filter(s => getSaleAccountDate(s).startsWith(ms));
     const existAmt   = mo.reduce((s,x) => s+effAmt(x), 0);
     const recvAmt    = mo.filter(s=>s.received).reduce((s,x) => s+effAmt(x), 0);
     const futureAmt  = futureKomonor[ms] || 0;
@@ -2913,7 +2932,7 @@ function renderSalesAnnual() {
       const spotRows = Object.values(state.projects)
         .filter(p => p.type === 'spot')
         .map(p => {
-          const salArr = Object.values(state.sales).filter(s => s.projectId === p.id && (s.expectedDate||'').startsWith(yearStr));
+          const salArr = Object.values(state.sales).filter(s => s.projectId === p.id && getSaleAccountDate(s).startsWith(yearStr) && isSaleCountable(s));
           const fee = salArr.reduce((s,x) => s+effAmt(x), 0);
           const hours = calcHours(p.id, null);
           if (!fee && !hours) return '';
