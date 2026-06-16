@@ -1467,13 +1467,29 @@ function getTasksForTab(tab) {
   if (tab === 'today') tasks = tasks.filter(t => t.dueDate && t.dueDate <= today);
   else if (tab === 'week') tasks = tasks.filter(t => t.dueDate && t.dueDate <= week);
   else if (tab === 'month') tasks = tasks.filter(t => t.dueDate && t.dueDate <= month);
-  // 期限の近い順に並べる（期限なしは末尾）
-  tasks.sort((a, b) => {
-    if (!a.dueDate && !b.dueDate) return 0;
-    if (!a.dueDate) return 1;
-    if (!b.dueDate) return -1;
-    return a.dueDate.localeCompare(b.dueDate);
-  });
+  // 保存済み並び順があればそれを優先、なければ期限日順
+  const savedOrder = state.taskOrder[`tab_${tab}`];
+  if (savedOrder && savedOrder.length) {
+    const orderMap = {};
+    savedOrder.forEach((id, i) => { orderMap[id] = i; });
+    tasks.sort((a, b) => {
+      const ai = orderMap[a.id] !== undefined ? orderMap[a.id] : 99999;
+      const bi = orderMap[b.id] !== undefined ? orderMap[b.id] : 99999;
+      if (ai !== bi) return ai - bi;
+      // 新規タスク（orderMapにない）は期限日順
+      if (!a.dueDate && !b.dueDate) return 0;
+      if (!a.dueDate) return 1;
+      if (!b.dueDate) return -1;
+      return a.dueDate.localeCompare(b.dueDate);
+    });
+  } else {
+    tasks.sort((a, b) => {
+      if (!a.dueDate && !b.dueDate) return 0;
+      if (!a.dueDate) return 1;
+      if (!b.dueDate) return -1;
+      return a.dueDate.localeCompare(b.dueDate);
+    });
+  }
   return tasks;
 }
 function renderTaskList() {
