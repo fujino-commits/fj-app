@@ -299,7 +299,7 @@ label{display:block;font-size:12px;color:var(--text2);margin-bottom:4px;}
 .pending-badge{background:#2a1a00;color:var(--orange);}
 .spot-type-tag{background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:3px 8px;font-size:11px;color:var(--text2);}
 .page-actions{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;}
-</style>
+.task-date-header{font-size:11px;font-weight:600;color:var(--text3);padding:10px 0 4px;border-bottom:1px solid var(--border);margin-bottom:4px;letter-spacing:.5px;}.task-date-group+.task-date-group{margin-top:14px;}.task-group-container:empty{display:none;}</style>
 </head>
 <body>
 
@@ -1494,16 +1494,15 @@ function getTasksForTab(tab) {
   if (tab === 'today') tasks = tasks.filter(t => t.dueDate && t.dueDate <= today);
   else if (tab === 'week') tasks = tasks.filter(t => t.dueDate && t.dueDate <= week);
   else if (tab === 'month') tasks = tasks.filter(t => t.dueDate && t.dueDate <= month);
-  // 日付グループに分ける
   const groups = {};
   tasks.forEach(t => {
     const key = t.dueDate || '';
     if (!groups[key]) groups[key] = [];
     groups[key].push(t);
   });
-  // 各グループ内を手動順で並べる
   Object.keys(groups).forEach(date => {
-    const saved = state.taskOrder['date_' + date];
+    const orderKey = 'date_' + date;
+    const saved = state.taskOrder[orderKey];
     if (saved && saved.length) {
       const map = {};
       saved.forEach((id, i) => { map[id] = i; });
@@ -1514,11 +1513,8 @@ function getTasksForTab(tab) {
       });
     }
   });
-  // 日付グループを日付順に並べて結合
   const sortedDates = Object.keys(groups).sort((a, b) => {
-    if (!a && !b) return 0;
-    if (!a) return 1;
-    if (!b) return -1;
+    if (!a && !b) return 0; if (!a) return 1; if (!b) return -1;
     return a.localeCompare(b);
   });
   return sortedDates.flatMap(date => groups[date]);
@@ -1531,10 +1527,26 @@ function renderTaskList() {
     { key:'all', label:'全て' },
   ];
   const tasks = getTasksForTab(currentTaskTab);
-
-  let tasksHtml = tasks.map(t => taskCardHtml(t, true)).join('');
-  if (!tasks.length) tasksHtml = `<div class="empty-state"><div class="empty-icon">✅</div><p>このタブにタスクはありません</p></div>`;
-
+  let tasksHtml = '';
+  if (!tasks.length) {
+    tasksHtml = '<div class="empty-state"><div class="empty-icon">✅</div><p>このタブにタスクはありません</p></div>';
+  } else {
+    const groups = {};
+    const dateOrder = [];
+    tasks.forEach(t => {
+      const key = t.dueDate || '';
+      if (!groups[key]) { groups[key] = []; dateOrder.push(key); }
+      groups[key].push(t);
+    });
+    tasksHtml = dateOrder.map(date => {
+      const label = date ? fmtDate(date) : '期限なし';
+      const cards = groups[date].map(t => taskCardHtml(t, true)).join('');
+      return '<div class="task-date-group">' +
+        '<div class="task-date-header">' + label + '</div>' +
+        '<div class="task-group-container" data-date="' + date + '">' + cards + '</div>' +
+        '</div>';
+    }).join('');
+  }
   return `
   <div class="page-header"><h1 class="page-title">タスク<span>リスト</span></h1></div>
   <div class="page-content">
@@ -1542,28 +1554,6 @@ function renderTaskList() {
       ${tabs.map(tb => `<button class="tab-btn ${currentTaskTab===tb.key?'active':''}" onclick="switchTaskTab('${tb.key}')">${tb.label}</button>`).join('')}
     </div>
     <div id="task-list-container">${tasksHtml}</div>
-  </div>`;
-}
-function taskCardHtml(t, showProj) {
-  const p = state.projects[t.projectId];
-  const s = dueStatus(t.dueDate);
-  const pname = t.projectId === '__expense__' ? '経費申請' : (p ? escHtml(p.name) : '');
-  const projLink = t.projectId && t.projectId !== '__expense__' && p
-    ? `<span class="task-proj-link" onclick="event.stopPropagation();navigate('project','${t.projectId}')">${pname}</span>`
-    : `<span class="text-muted">${pname}</span>`;
-  return `
-  <div class="task-card due-${s}" data-task-id="${t.id}" onclick="openRightSidebar('${t.id}')">
-    <button class="task-check" onclick="event.stopPropagation();completeTask('${t.id}')" title="完了にする"></button>
-    <span class="task-drag-handle">⠿</span>
-    <div class="task-info">
-      <div class="task-name">${escHtml(t.name)}</div>
-      <div class="task-meta">
-        ${showProj ? projLink : ''}
-        ${dueBadgeHtml(t.dueDate)}
-        ${t.estimatedMinutes ? `<span class="task-estimate">⏱ ${t.estimatedMinutes}分</span>` : ''}
-        ${t.requestedAt ? `<span class="text-muted text-xs">依頼: ${fmtDate(t.requestedAt)}</span>` : ''}
-      </div>
-    </div>
   </div>`;
 }
 function switchTaskTab(tab) {
@@ -1582,32 +1572,27 @@ function completeTask(id) {
   closeRightSidebar();
 }
 function setupSortable() {
-  const container = document.getElementById('task-list-container');
-  if (!container || typeof Sortable === 'undefined') return;
   sortables.forEach(s => { try { s.destroy(); } catch(e){} });
   sortables = [];
-  const s = Sortable.create(container, {
-    animation: 150,
-    handle: '.task-drag-handle',
-    onEnd: () => {
-      const allCards = [...container.querySelectorAll('[data-task-id]')];
-      const groups = {};
-      allCards.forEach(el => {
-        const task = state.tasks[el.dataset.taskId];
-        if (!task) return;
-        const date = task.dueDate || '';
-        if (!groups[date]) groups[date] = [];
-        groups[date].push(el.dataset.taskId);
-      });
-      Object.entries(groups).forEach(([date, ids]) => {
-        state.taskOrder['date_' + date] = ids;
-      });
-      scheduleSave();
-    }
+  if (typeof Sortable === 'undefined') return;
+  document.querySelectorAll('.task-group-container').forEach(container => {
+    const date = container.dataset.date;
+    const s = Sortable.create(container, {
+      animation: 150,
+      handle: '.task-drag-handle',
+      onEnd: () => {
+        const ids = [...container.querySelectorAll('[data-task-id]')].map(el => el.dataset.taskId);
+        const orderKey = 'date_' + date;
+        state.taskOrder[orderKey] = ids;
+        scheduleSave();
+      }
+    });
+    sortables.push(s);
   });
-  sortables.push(s);
 }
-
+function setupPageEvents() {
+  if (currentPage === 'tasklist') setTimeout(setupSortable, 100);
+}
 // ============================================================
 // NEW PROJECT (立件)
 // ============================================================
