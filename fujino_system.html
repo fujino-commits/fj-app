@@ -1556,6 +1556,28 @@ function renderTaskList() {
     <div id="task-list-container">${tasksHtml}</div>
   </div>`;
 }
+function taskCardHtml(t, showProj) {
+  const p = state.projects[t.projectId];
+  const s = dueStatus(t.dueDate);
+  const pname = t.projectId === '__expense__' ? '経費申請' : (p ? escHtml(p.name) : '');
+  const projLink = t.projectId && t.projectId !== '__expense__' && p
+    ? '<span class="task-proj-link" onclick="event.stopPropagation();navigate('project','' + t.projectId + '')">' + pname + '</span>'
+    : '<span class="text-muted">' + pname + '</span>';
+  return `
+  <div class="task-card due-${s}" data-task-id="${t.id}" onclick="openRightSidebar('${t.id}')">
+    <button class="task-check" onclick="event.stopPropagation();completeTask('${t.id}')" title="完了にする"></button>
+    <span class="task-drag-handle">⠇</span>
+    <div class="task-info">
+      <div class="task-name">${escHtml(t.name)}</div>
+      <div class="task-meta">
+        ${showProj ? projLink : ''}
+        ${dueBadgeHtml(t.dueDate)}
+        ${t.estimatedMinutes ? '<span class="task-estimate">⏱ ' + t.estimatedMinutes + '分</span>' : ''}
+        ${t.requestedAt ? '<span class="text-muted text-xs">依頼: ' + fmtDate(t.requestedAt) + '</span>' : ''}
+      </div>
+    </div>
+  </div>`;
+}
 function switchTaskTab(tab) {
   currentTaskTab = tab;
   renderPage();
