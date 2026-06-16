@@ -1494,30 +1494,34 @@ function getTasksForTab(tab) {
   if (tab === 'today') tasks = tasks.filter(t => t.dueDate && t.dueDate <= today);
   else if (tab === 'week') tasks = tasks.filter(t => t.dueDate && t.dueDate <= week);
   else if (tab === 'month') tasks = tasks.filter(t => t.dueDate && t.dueDate <= month);
-  // 保存済み並び順があればそれを優先、なければ期限日順
-  const savedOrder = state.taskOrder[`tab_${tab}`];
-  if (savedOrder && savedOrder.length) {
-    const orderMap = {};
-    savedOrder.forEach((id, i) => { orderMap[id] = i; });
-    tasks.sort((a, b) => {
-      const ai = orderMap[a.id] !== undefined ? orderMap[a.id] : 99999;
-      const bi = orderMap[b.id] !== undefined ? orderMap[b.id] : 99999;
-      if (ai !== bi) return ai - bi;
-      // 新規タスク（orderMapにない）は期限日順
-      if (!a.dueDate && !b.dueDate) return 0;
-      if (!a.dueDate) return 1;
-      if (!b.dueDate) return -1;
-      return a.dueDate.localeCompare(b.dueDate);
-    });
-  } else {
-    tasks.sort((a, b) => {
-      if (!a.dueDate && !b.dueDate) return 0;
-      if (!a.dueDate) return 1;
-      if (!b.dueDate) return -1;
-      return a.dueDate.localeCompare(b.dueDate);
-    });
-  }
-  return tasks;
+  // 日付グループに分ける
+  const groups = {};
+  tasks.forEach(t => {
+    const key = t.dueDate || '';
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(t);
+  });
+  // 各グループ内を手動順で並べる
+  Object.keys(groups).forEach(date => {
+    const saved = state.taskOrder['date_' + date];
+    if (saved && saved.length) {
+      const map = {};
+      saved.forEach((id, i) => { map[id] = i; });
+      groups[date].sort((a, b) => {
+        const ai = map[a.id] !== undefined ? map[a.id] : 99999;
+        const bi = map[b.id] !== undefined ? map[b.id] : 99999;
+        return ai - bi;
+      });
+    }
+  });
+  // 日付グループを日付順に並べて結合
+  const sortedDates = Object.keys(groups).sort((a, b) => {
+    if (!a && !b) return 0;
+    if (!a) return 1;
+    if (!b) return -1;
+    return a.localeCompare(b);
+  });
+  return sortedDates.flatMap(date => groups[date]);
 }
 function renderTaskList() {
   const tabs = [
@@ -1586,8 +1590,18 @@ function setupSortable() {
     animation: 150,
     handle: '.task-drag-handle',
     onEnd: () => {
-      const ids = [...container.querySelectorAll('[data-task-id]')].map(el => el.dataset.taskId);
-      state.taskOrder[`tab_${currentTaskTab}`] = ids;
+      const allCards = [...container.querySelectorAll('[data-task-id]')];
+      const groups = {};
+      allCards.forEach(el => {
+        const task = state.tasks[el.dataset.taskId];
+        if (!task) return;
+        const date = task.dueDate || '';
+        if (!groups[date]) groups[date] = [];
+        groups[date].push(el.dataset.taskId);
+      });
+      Object.entries(groups).forEach(([date, ids]) => {
+        state.taskOrder['date_' + date] = ids;
+      });
       scheduleSave();
     }
   });
