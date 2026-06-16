@@ -2418,6 +2418,8 @@ function openAddTaskModal(projectId) {
 function submitAddTask(projectId) {
   const name = (document.getElementById('at-name')?.value || '').trim();
   if (!name) { alert('タスク名を入力してください'); return; }
+  const dueDate = document.getElementById('at-dueDate')?.value ?? '';
+  if (!dueDate) { alert('完了予定日を入力してください'); return; }
   const t = {
     id: genId(), projectId,
     name,
