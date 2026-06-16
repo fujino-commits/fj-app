@@ -1559,21 +1559,21 @@ function renderTaskList() {
 function taskCardHtml(t, showProj) {
   const p = state.projects[t.projectId];
   const s = dueStatus(t.dueDate);
-  const pname = t.projectId === '__expense__' ? '経費申請' : (p ? escHtml(p.name) : '');
-  const q = "'";
+  const pname = t.projectId === '__expense__' ? 'çµè²»ç³è«' : (p ? escHtml(p.name) : '');
+  const sq = String.fromCharCode(39);
   const projLink = t.projectId && t.projectId !== '__expense__' && p
-    ? '<span class="task-proj-link" onclick="event.stopPropagation();navigate(' + q + 'project' + q + ',' + q + t.projectId + q + ')">' + pname + '</span>'
+    ? '<span class="task-proj-link" onclick="event.stopPropagation();navigate(' + sq + 'project' + sq + ',' + sq + t.projectId + sq + ')">' + pname + '</span>'
     : '<span class="text-muted">' + pname + '</span>';
-  return '<div class="task-card due-' + s + '" data-task-id="' + t.id + '" onclick="openRightSidebar(' + q + t.id + q + ')">'
-    + '<button class="task-check" onclick="event.stopPropagation();completeTask(' + q + t.id + q + ')" title="完了にする"></button>'
-    + '<span class="task-drag-handle">⠿</span>'
+  return '<div class="task-card due-' + s + '" data-task-id="' + t.id + '" onclick="openRightSidebar(' + sq + t.id + sq + ')">'
+    + '<button class="task-check" onclick="event.stopPropagation();completeTask(' + sq + t.id + sq + ')" title="å®äºã«ãã"></button>'
+    + '<span class="task-drag-handle">â ¿</span>'
     + '<div class="task-info">'
     + '<div class="task-name">' + escHtml(t.name) + '</div>'
     + '<div class="task-meta">'
     + (showProj ? projLink : '')
     + dueBadgeHtml(t.dueDate)
-    + (t.estimatedMinutes ? '<span class="task-estimate">⏱ ' + t.estimatedMinutes + '分</span>' : '')
-    + (t.requestedAt ? '<span class="text-muted text-xs">依頼: ' + fmtDate(t.requestedAt) + '</span>' : '')
+    + (t.estimatedMinutes ? '<span class="task-estimate">â± ' + t.estimatedMinutes + 'å</span>' : '')
+    + (t.requestedAt ? '<span class="text-muted text-xs">ä¾é ¼: ' + fmtDate(t.requestedAt) + '</span>' : '')
     + '</div></div></div>';
 }
 
