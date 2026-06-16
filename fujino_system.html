@@ -1355,8 +1355,11 @@ function renderDashboard() {
       </div>
       ${!timerActive ? `
         <div style="flex:1;min-width:180px;">
-          <input type="text" id="timer-search" placeholder="🔍 プロジェクト検索..." oninput="filterTimerProjects(this.value)" style="margin-bottom:6px;font-size:12px;padding:6px 10px;">
-          <select class="timer-proj-select" id="timer-proj-sel" style="width:100%;">
+          <div style="position:relative;">
+            <input type="text" id="timer-search" placeholder="🔍 プロジェクト検索..." oninput="filterTimerProjects(this.value)" autocomplete="off" style="font-size:12px;padding:6px 10px;width:100%;">
+            <div id="timer-search-results" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--bg2);border:1px solid var(--border);border-radius:6px;max-height:200px;overflow-y:auto;z-index:100;box-shadow:0 4px 12px rgba(0,0,0,.5);margin-top:2px;"></div>
+          </div>
+          <select class="timer-proj-select" id="timer-proj-sel" style="width:100%;margin-top:6px;">
             <option value="">— 選択 —</option>${projOptions}
           </select>
         </div>
@@ -1382,13 +1385,27 @@ function renderDashboard() {
 }
 function filterTimerProjects(q) {
   const sel = document.getElementById('timer-proj-sel');
-  if (!sel) return;
+  const results = document.getElementById('timer-search-results');
+  if (!sel || !results) return;
+  if (!q) { results.style.display = 'none'; return; }
   const lower = q.toLowerCase();
-  Array.from(sel.options).forEach(opt => {
-    if (opt.value === '') return;
-    opt.hidden = lower ? !opt.text.toLowerCase().includes(lower) : false;
-  });
-  if (sel.selectedOptions[0] && sel.selectedOptions[0].hidden) sel.value = '';
+  const matches = Array.from(sel.options).filter(opt => opt.value && opt.text.toLowerCase().includes(lower));
+  if (matches.length === 0) {
+    results.innerHTML = '<div style="padding:8px 12px;color:var(--text3);font-size:12px;">該当なし</div>';
+  } else {
+    results.innerHTML = matches.map(opt =>
+      `<div onclick="selectTimerProject('${opt.value}',this.textContent)" style="padding:8px 12px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--border);" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">${opt.text}</div>`
+    ).join('');
+  }
+  results.style.display = 'block';
+}
+function selectTimerProject(id, name) {
+  const sel = document.getElementById('timer-proj-sel');
+  const search = document.getElementById('timer-search');
+  const results = document.getElementById('timer-search-results');
+  if (sel) sel.value = id;
+  if (search) search.value = name;
+  if (results) results.style.display = 'none';
 }
 function elapsedStr(startTime) {
   const sec = Math.floor((Date.now() - new Date(startTime).getTime()) / 1000);
