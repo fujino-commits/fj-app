@@ -11,7 +11,7 @@
   --bg: #0a0a0a;
   --bg2: #111111;
   --bg3: #181818;
-  --bg4: #202020;
+  --bg4: #202020;h
   --border: #2a2a2a;
   --border2: #333;
   --gold: #c9a84c;
@@ -1379,6 +1379,16 @@ function renderDashboard() {
       </div>
     </div>
   </div>`;
+}
+function filterTimerProjects(q) {
+  const sel = document.getElementById('timer-proj-sel');
+  if (!sel) return;
+  const lower = q.toLowerCase();
+  Array.from(sel.options).forEach(opt => {
+    if (opt.value === '') return;
+    opt.hidden = lower ? !opt.text.toLowerCase().includes(lower) : false;
+  });
+  if (sel.selectedOptions[0] && sel.selectedOptions[0].hidden) sel.value = '';
 }
 function elapsedStr(startTime) {
   const sec = Math.floor((Date.now() - new Date(startTime).getTime()) / 1000);
