@@ -1559,21 +1559,21 @@ function renderTaskList() {
 function taskCardHtml(t, showProj) {
   const p = state.projects[t.projectId];
   const s = dueStatus(t.dueDate);
-  const pname = t.projectId === '__expense__' ? 'çµè²»ç³è«' : (p ? escHtml(p.name) : '');
+  const pname = t.projectId === '__expense__' ? '\u7d4c\u8cbb\u7533\u8acb' : (p ? escHtml(p.name) : '');
   const sq = String.fromCharCode(39);
   const projLink = t.projectId && t.projectId !== '__expense__' && p
     ? '<span class="task-proj-link" onclick="event.stopPropagation();navigate(' + sq + 'project' + sq + ',' + sq + t.projectId + sq + ')">' + pname + '</span>'
     : '<span class="text-muted">' + pname + '</span>';
   return '<div class="task-card due-' + s + '" data-task-id="' + t.id + '" onclick="openRightSidebar(' + sq + t.id + sq + ')">'
-    + '<button class="task-check" onclick="event.stopPropagation();completeTask(' + sq + t.id + sq + ')" title="å®äºã«ãã"></button>'
-    + '<span class="task-drag-handle">â ¿</span>'
+    + '<button class="task-check" onclick="event.stopPropagation();completeTask(' + sq + t.id + sq + ')" title="\u5b8c\u4e86\u306b\u3059\u308b"></button>'
+    + '<span class="task-drag-handle">\u283f</span>'
     + '<div class="task-info">'
     + '<div class="task-name">' + escHtml(t.name) + '</div>'
     + '<div class="task-meta">'
     + (showProj ? projLink : '')
     + dueBadgeHtml(t.dueDate)
-    + (t.estimatedMinutes ? '<span class="task-estimate">â± ' + t.estimatedMinutes + 'å</span>' : '')
-    + (t.requestedAt ? '<span class="text-muted text-xs">ä¾é ¼: ' + fmtDate(t.requestedAt) + '</span>' : '')
+    + (t.estimatedMinutes ? '<span class="task-estimate">\u23f1 ' + t.estimatedMinutes + '\u5206</span>' : '')
+    + (t.requestedAt ? '<span class="text-muted text-xs">\u4f9d\u983c: ' + fmtDate(t.requestedAt) + '</span>' : '')
     + '</div></div></div>';
 }
 
