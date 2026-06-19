@@ -550,6 +550,7 @@ async function decryptPayload(obj, password) {
 }
 
 function saveLocal() {
+  state._localUpdatedAt = new Date().toISOString();
   localStorage.setItem(STATE_KEY, JSON.stringify(state));
 }
 function loadLocal() {
@@ -609,6 +610,10 @@ async function loadFromGist() {
     const res = await fetch(`${GIST_BASE}/gists/${gistId}`, {
       headers: { 'Authorization': `Bearer ${gistToken}` }
     });
+    if (!res.ok) {
+      showSyncBadge('⚠ Gist読み込み失敗(' + res.status + ')', true);
+      return false;
+    }
     const json = await res.json();
     const file = json.files && json.files['data.json'];
     if (!file) return false;
@@ -621,6 +626,15 @@ async function loadFromGist() {
         return 'wrong_password';
       }
     }
+    // ローカルデータがGistより新しい場合は上書きしない（データ保護）
+    const localUpdatedAt = state._localUpdatedAt || '';
+    const gistUpdatedAt  = d.updatedAt || d._localUpdatedAt || '';
+    if (localUpdatedAt && gistUpdatedAt && localUpdatedAt > gistUpdatedAt) {
+      console.info('[Gist] ローカルの方が新しいためスキップ', localUpdatedAt, '>', gistUpdatedAt);
+      // ローカルデータをGistに反映する
+      setTimeout(syncToGist, 2000);
+      return 'local_newer';
+    }
     state.projects    = d.projects    || {};
     state.tasks       = d.tasks       || {};
     state.sales       = d.sales       || {};
@@ -630,7 +644,7 @@ async function loadFromGist() {
     state.activeTimer = d.activeTimer || null;
     saveLocal();
     return true;
-  } catch(e) { console.warn('Gist load error:', e); }
+  } catch(e) { console.warn('Gist load error:', e); showSyncBadge('⚠ Gist読み込みエラー', true); }
   return false;
 }
 function exportData() {
@@ -892,6 +906,7 @@ async function startApp() {
         showEncPwOverlay();
         return; // finishStartApp は submitEncPw で呼ばれる
       }
+      // local_newer: ローカルが新しいのでそのまま続行（syncToGistは自動スケジュール済み）
     } else {
       // 初回: ローカルデータをGistに保存
       await syncToGist();
