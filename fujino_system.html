@@ -145,6 +145,12 @@ label{display:block;font-size:12px;color:var(--text2);margin-bottom:4px;}
 
 /* TASK LIST */
 .task-tabs{display:flex;gap:4px;margin-bottom:16px;flex-wrap:wrap;}
+.task-date-group{margin-bottom:20px;}
+.task-date-header{font-size:11px;font-weight:700;color:var(--text3);padding:4px 0 6px;border-bottom:1px solid var(--border);margin-bottom:6px;letter-spacing:1px;display:flex;align-items:center;gap:6px;}
+.task-date-header.is-overdue{color:var(--red);}
+.task-date-header.is-today{color:var(--orange);}
+.task-date-header.is-tomorrow{color:var(--gold);}
+.task-date-group-list{min-height:4px;}
 .tab-btn{padding:7px 16px;border-radius:6px;background:none;border:1px solid var(--border);color:var(--text3);font-size:13px;font-weight:500;transition:all .2s;}
 .tab-btn:hover{border-color:var(--border2);color:var(--text2);}
 .tab-btn.active{background:var(--bg3);border-color:var(--gold);color:var(--gold);}
@@ -1519,30 +1525,36 @@ function getTasksForTab(tab) {
   if (tab === 'today') tasks = tasks.filter(t => t.dueDate && t.dueDate <= today);
   else if (tab === 'week') tasks = tasks.filter(t => t.dueDate && t.dueDate <= week);
   else if (tab === 'month') tasks = tasks.filter(t => t.dueDate && t.dueDate <= month);
-  // 保存済み並び順があればそれを優先、なければ期限日順
-  const savedOrder = state.taskOrder[`tab_${tab}`];
-  if (savedOrder && savedOrder.length) {
-    const orderMap = {};
-    savedOrder.forEach((id, i) => { orderMap[id] = i; });
-    tasks.sort((a, b) => {
-      const ai = orderMap[a.id] !== undefined ? orderMap[a.id] : 99999;
-      const bi = orderMap[b.id] !== undefined ? orderMap[b.id] : 99999;
-      if (ai !== bi) return ai - bi;
-      // 新規タスク（orderMapにない）は期限日順
-      if (!a.dueDate && !b.dueDate) return 0;
-      if (!a.dueDate) return 1;
-      if (!b.dueDate) return -1;
-      return a.dueDate.localeCompare(b.dueDate);
-    });
-  } else {
-    tasks.sort((a, b) => {
-      if (!a.dueDate && !b.dueDate) return 0;
-      if (!a.dueDate) return 1;
-      if (!b.dueDate) return -1;
-      return a.dueDate.localeCompare(b.dueDate);
-    });
-  }
   return tasks;
+}
+
+function groupTasksByDate(tasks) {
+  const groups = {};
+  tasks.forEach(t => {
+    const key = t.dueDate || 'none';
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(t);
+  });
+  // 各グループ内を保存済み順、なければデフォルト順
+  Object.entries(groups).forEach(([key, groupTasks]) => {
+    const savedOrder = (state.taskOrder || {})[`date_${key}`];
+    if (savedOrder && savedOrder.length) {
+      const orderMap = {};
+      savedOrder.forEach((id, i) => { orderMap[id] = i; });
+      groupTasks.sort((a, b) => {
+        const ai = orderMap[a.id] !== undefined ? orderMap[a.id] : 99999;
+        const bi = orderMap[b.id] !== undefined ? orderMap[b.id] : 99999;
+        return ai - bi;
+      });
+    }
+  });
+  // 日付キーを昇順ソート、期限なしは最後
+  const sortedKeys = Object.keys(groups).sort((a, b) => {
+    if (a === 'none') return 1;
+    if (b === 'none') return -1;
+    return a.localeCompare(b);
+  });
+  return sortedKeys.map(key => ({ dateKey: key, tasks: groups[key] }));
 }
 function renderTaskList() {
   const tabs = [
@@ -1552,9 +1564,30 @@ function renderTaskList() {
     { key:'all', label:'全て' },
   ];
   const tasks = getTasksForTab(currentTaskTab);
+  const groups = groupTasksByDate(tasks);
+  const today = todayStr();
+  const tomorrow = addDays(today, 1);
 
-  let tasksHtml = tasks.map(t => taskCardHtml(t, true)).join('');
-  if (!tasks.length) tasksHtml = `<div class="empty-state"><div class="empty-icon">✅</div><p>このタブにタスクはありません</p></div>`;
+  let tasksHtml = '';
+  if (!tasks.length) {
+    tasksHtml = `<div class="empty-state"><div class="empty-icon">✅</div><p>このタブにタスクはありません</p></div>`;
+  } else {
+    groups.forEach(({ dateKey, tasks: groupTasks }) => {
+      let label, cls = '';
+      if (dateKey === 'none') { label = '期限なし'; }
+      else if (dateKey < today) { label = `⚠ ${fmtDate(dateKey)}（期限超過）`; cls = 'is-overdue'; }
+      else if (dateKey === today) { label = `🔴 ${fmtDate(dateKey)}（今日）`; cls = 'is-today'; }
+      else if (dateKey === tomorrow) { label = `🟡 ${fmtDate(dateKey)}（明日）`; cls = 'is-tomorrow'; }
+      else { label = `📅 ${fmtDate(dateKey)}`; }
+      tasksHtml += `
+        <div class="task-date-group">
+          <div class="task-date-header ${cls}">${label}</div>
+          <div class="task-date-group-list" data-date-key="${escHtml(dateKey)}">
+            ${groupTasks.map(t => taskCardHtml(t, true)).join('')}
+          </div>
+        </div>`;
+    });
+  }
 
   return `
   <div class="page-header"><h1 class="page-title">タスク<span>リスト</span></h1></div>
@@ -1603,20 +1636,26 @@ function completeTask(id) {
   closeRightSidebar();
 }
 function setupSortable() {
-  const container = document.getElementById('task-list-container');
-  if (!container || typeof Sortable === 'undefined') return;
+  if (typeof Sortable === 'undefined') return;
   sortables.forEach(s => { try { s.destroy(); } catch(e){} });
   sortables = [];
-  const s = Sortable.create(container, {
-    animation: 150,
-    handle: '.task-drag-handle',
-    onEnd: () => {
-      const ids = [...container.querySelectorAll('[data-task-id]')].map(el => el.dataset.taskId);
-      state.taskOrder[`tab_${currentTaskTab}`] = ids;
-      scheduleSave();
-    }
+  // 日付グループごとに独立したSortableを作成（グループ間の移動不可）
+  document.querySelectorAll('.task-date-group-list').forEach(container => {
+    const dateKey = container.dataset.dateKey;
+    if (!dateKey) return;
+    const s = Sortable.create(container, {
+      animation: 150,
+      handle: '.task-drag-handle',
+      group: { name: `date_${dateKey}`, pull: false, put: false }, // 同グループ内のみ
+      onEnd: () => {
+        const ids = [...container.querySelectorAll('[data-task-id]')].map(el => el.dataset.taskId);
+        if (!state.taskOrder) state.taskOrder = {};
+        state.taskOrder[`date_${dateKey}`] = ids;
+        scheduleSave();
+      }
+    });
+    sortables.push(s);
   });
-  sortables.push(s);
 }
 
 // ============================================================
