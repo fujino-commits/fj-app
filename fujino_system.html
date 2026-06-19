@@ -11,7 +11,7 @@
   --bg: #0a0a0a;
   --bg2: #111111;
   --bg3: #181818;
-  --bg4: #202020;h
+  --bg4: #202020;
   --border: #2a2a2a;
   --border2: #333;
   --gold: #c9a84c;
@@ -299,7 +299,7 @@ label{display:block;font-size:12px;color:var(--text2);margin-bottom:4px;}
 .pending-badge{background:#2a1a00;color:var(--orange);}
 .spot-type-tag{background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:3px 8px;font-size:11px;color:var(--text2);}
 .page-actions{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;}
-.task-date-header{font-size:11px;font-weight:600;color:var(--text3);padding:10px 0 4px;border-bottom:1px solid var(--border);margin-bottom:4px;letter-spacing:.5px;}.task-date-group+.task-date-group{margin-top:14px;}.task-group-container:empty{display:none;}</style>
+</style>
 </head>
 <body>
 
@@ -386,6 +386,7 @@ label{display:block;font-size:12px;color:var(--text2);margin-bottom:4px;}
       <div class="sidebar-header">
         <div class="sidebar-title">藤野晃司<br>完全管理システム</div>
         <div class="sidebar-subtitle">Lawyer Management <span id="sync-badge" style="font-size:10px;margin-left:4px;"></span></div>
+        <div id="sync-last" style="font-size:10px;color:var(--text3);margin-top:2px;"></div>
         <div style="margin-top:6px;">
           <button class="btn btn-outline btn-sm" style="font-size:10px;padding:3px 8px;" onclick="openApiKeyModal()">⚙ API設定確認</button>
           <button class="btn btn-outline btn-sm" style="font-size:10px;padding:3px 8px;margin-top:4px;" onclick="exportData()">📤 データ書き出し</button>
@@ -771,13 +772,61 @@ function openApiKeyModal() {
     <div id="sync-test-result" style="font-size:12px;margin-top:6px;"></div>
   `);
 }
+let syncErrorCount = 0;
 function showSyncBadge(msg, isError) {
   const el = document.getElementById('sync-badge');
   if (!el) return;
   el.textContent = msg;
   el.style.color = isError ? 'var(--red)' : 'var(--green)';
   clearTimeout(el._t);
-  el._t = setTimeout(() => { el.textContent = ''; }, 3000);
+  if (isError) {
+    // エラーは消えない＋カウント
+    syncErrorCount++;
+    el.style.fontWeight = 'bold';
+    // 3回連続失敗したら目立つアラートバナーを出す
+    if (syncErrorCount >= 3) {
+      showSyncErrorBanner();
+    }
+  } else {
+    syncErrorCount = 0;
+    el.style.fontWeight = 'normal';
+    // 成功時：最終同期時刻を記録
+    const now = new Date().toISOString();
+    localStorage.setItem('fujino_last_sync', now);
+    updateSyncLastLabel();
+    el._t = setTimeout(() => { el.textContent = ''; }, 4000);
+  }
+}
+
+function updateSyncLastLabel() {
+  const el = document.getElementById('sync-last');
+  if (!el) return;
+  const raw = localStorage.getItem('fujino_last_sync');
+  if (!raw) { el.textContent = '未同期'; el.style.color = 'var(--text3)'; return; }
+  const last = new Date(raw);
+  const diffMs = Date.now() - last.getTime();
+  const diffMin = Math.floor(diffMs / 60000);
+  const diffH = Math.floor(diffMin / 60);
+  let label;
+  if (diffMin < 1) label = '最終同期：たった今';
+  else if (diffMin < 60) label = `最終同期：${diffMin}分前`;
+  else if (diffH < 24) label = `最終同期：${diffH}時間前`;
+  else label = `最終同期：${Math.floor(diffH/24)}日前`;
+  el.textContent = label;
+  // 1時間以上前なら赤く表示
+  el.style.color = diffH >= 1 ? 'var(--red)' : 'var(--text3)';
+}
+
+function showSyncErrorBanner() {
+  if (document.getElementById('sync-error-banner')) return; // 既に表示中
+  const banner = document.createElement('div');
+  banner.id = 'sync-error-banner';
+  banner.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#7a1a1a;color:#fff;font-size:13px;padding:10px 16px;z-index:99999;display:flex;align-items:center;justify-content:space-between;box-shadow:0 2px 8px rgba(0,0,0,.5);';
+  banner.innerHTML = `
+    <span>⚠ クラウド同期が失敗しています。このまま使い続けるとデータが消える可能性があります。⚙ API設定確認でトークンを確認してください。</span>
+    <button onclick="document.getElementById('sync-error-banner').remove();syncErrorCount=0;" style="background:rgba(255,255,255,.2);border:none;color:#fff;padding:4px 12px;border-radius:4px;cursor:pointer;margin-left:12px;flex-shrink:0;">✕ 閉じる</button>
+  `;
+  document.body.prepend(banner);
 }
 
 function submitGistConfig() {
@@ -869,6 +918,9 @@ function finishStartApp() {
   if (state.activeTimer) startTimerDisplay();
   renderSidebar();
   navigate('dashboard');
+  // 最終同期ラベルを初期表示＆1分ごとに更新
+  updateSyncLastLabel();
+  setInterval(updateSyncLastLabel, 60000);
 }
 
 // ============================================================
@@ -1355,11 +1407,8 @@ function renderDashboard() {
       </div>
       ${!timerActive ? `
         <div style="flex:1;min-width:180px;">
-          <div style="position:relative;">
-            <input type="text" id="timer-search" placeholder="🔍 プロジェクト検索..." oninput="filterTimerProjects(this.value)" autocomplete="off" style="font-size:12px;padding:6px 10px;width:100%;">
-            <div id="timer-search-results" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--bg2);border:1px solid var(--border);border-radius:6px;max-height:200px;overflow-y:auto;z-index:100;box-shadow:0 4px 12px rgba(0,0,0,.5);margin-top:2px;"></div>
-          </div>
-          <select class="timer-proj-select" id="timer-proj-sel" style="width:100%;margin-top:6px;">
+          <input type="text" id="timer-search" placeholder="🔍 プロジェクト検索..." oninput="filterTimerProjects(this.value)" style="margin-bottom:6px;font-size:12px;padding:6px 10px;">
+          <select class="timer-proj-select" id="timer-proj-sel" style="width:100%;">
             <option value="">— 選択 —</option>${projOptions}
           </select>
         </div>
@@ -1382,30 +1431,6 @@ function renderDashboard() {
       </div>
     </div>
   </div>`;
-}
-function filterTimerProjects(q) {
-  const sel = document.getElementById('timer-proj-sel');
-  const results = document.getElementById('timer-search-results');
-  if (!sel || !results) return;
-  if (!q) { results.style.display = 'none'; return; }
-  const lower = q.toLowerCase();
-  const matches = Array.from(sel.options).filter(opt => opt.value && opt.text.toLowerCase().includes(lower));
-  if (matches.length === 0) {
-    results.innerHTML = '<div style="padding:8px 12px;color:var(--text3);font-size:12px;">該当なし</div>';
-  } else {
-    results.innerHTML = matches.map(opt =>
-      `<div onclick="selectTimerProject('${opt.value}',this.textContent)" style="padding:8px 12px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--border);" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">${opt.text}</div>`
-    ).join('');
-  }
-  results.style.display = 'block';
-}
-function selectTimerProject(id, name) {
-  const sel = document.getElementById('timer-proj-sel');
-  const search = document.getElementById('timer-search');
-  const results = document.getElementById('timer-search-results');
-  if (sel) sel.value = id;
-  if (search) search.value = name;
-  if (results) results.style.display = 'none';
 }
 function elapsedStr(startTime) {
   const sec = Math.floor((Date.now() - new Date(startTime).getTime()) / 1000);
@@ -1494,30 +1519,30 @@ function getTasksForTab(tab) {
   if (tab === 'today') tasks = tasks.filter(t => t.dueDate && t.dueDate <= today);
   else if (tab === 'week') tasks = tasks.filter(t => t.dueDate && t.dueDate <= week);
   else if (tab === 'month') tasks = tasks.filter(t => t.dueDate && t.dueDate <= month);
-  const groups = {};
-  tasks.forEach(t => {
-    const key = t.dueDate || '';
-    if (!groups[key]) groups[key] = [];
-    groups[key].push(t);
-  });
-  Object.keys(groups).forEach(date => {
-    const orderKey = 'date_' + date;
-    const saved = state.taskOrder[orderKey];
-    if (saved && saved.length) {
-      const map = {};
-      saved.forEach((id, i) => { map[id] = i; });
-      groups[date].sort((a, b) => {
-        const ai = map[a.id] !== undefined ? map[a.id] : 99999;
-        const bi = map[b.id] !== undefined ? map[b.id] : 99999;
-        return ai - bi;
-      });
-    }
-  });
-  const sortedDates = Object.keys(groups).sort((a, b) => {
-    if (!a && !b) return 0; if (!a) return 1; if (!b) return -1;
-    return a.localeCompare(b);
-  });
-  return sortedDates.flatMap(date => groups[date]);
+  // 保存済み並び順があればそれを優先、なければ期限日順
+  const savedOrder = state.taskOrder[`tab_${tab}`];
+  if (savedOrder && savedOrder.length) {
+    const orderMap = {};
+    savedOrder.forEach((id, i) => { orderMap[id] = i; });
+    tasks.sort((a, b) => {
+      const ai = orderMap[a.id] !== undefined ? orderMap[a.id] : 99999;
+      const bi = orderMap[b.id] !== undefined ? orderMap[b.id] : 99999;
+      if (ai !== bi) return ai - bi;
+      // 新規タスク（orderMapにない）は期限日順
+      if (!a.dueDate && !b.dueDate) return 0;
+      if (!a.dueDate) return 1;
+      if (!b.dueDate) return -1;
+      return a.dueDate.localeCompare(b.dueDate);
+    });
+  } else {
+    tasks.sort((a, b) => {
+      if (!a.dueDate && !b.dueDate) return 0;
+      if (!a.dueDate) return 1;
+      if (!b.dueDate) return -1;
+      return a.dueDate.localeCompare(b.dueDate);
+    });
+  }
+  return tasks;
 }
 function renderTaskList() {
   const tabs = [
@@ -1527,26 +1552,10 @@ function renderTaskList() {
     { key:'all', label:'全て' },
   ];
   const tasks = getTasksForTab(currentTaskTab);
-  let tasksHtml = '';
-  if (!tasks.length) {
-    tasksHtml = '<div class="empty-state"><div class="empty-icon">✅</div><p>このタブにタスクはありません</p></div>';
-  } else {
-    const groups = {};
-    const dateOrder = [];
-    tasks.forEach(t => {
-      const key = t.dueDate || '';
-      if (!groups[key]) { groups[key] = []; dateOrder.push(key); }
-      groups[key].push(t);
-    });
-    tasksHtml = dateOrder.map(date => {
-      const label = date ? fmtDate(date) : '期限なし';
-      const cards = groups[date].map(t => taskCardHtml(t, true)).join('');
-      return '<div class="task-date-group">' +
-        '<div class="task-date-header">' + label + '</div>' +
-        '<div class="task-group-container" data-date="' + date + '">' + cards + '</div>' +
-        '</div>';
-    }).join('');
-  }
+
+  let tasksHtml = tasks.map(t => taskCardHtml(t, true)).join('');
+  if (!tasks.length) tasksHtml = `<div class="empty-state"><div class="empty-icon">✅</div><p>このタブにタスクはありません</p></div>`;
+
   return `
   <div class="page-header"><h1 class="page-title">タスク<span>リスト</span></h1></div>
   <div class="page-content">
@@ -1559,24 +1568,25 @@ function renderTaskList() {
 function taskCardHtml(t, showProj) {
   const p = state.projects[t.projectId];
   const s = dueStatus(t.dueDate);
-  const pname = t.projectId === '__expense__' ? '\u7d4c\u8cbb\u7533\u8acb' : (p ? escHtml(p.name) : '');
-  const sq = String.fromCharCode(39);
+  const pname = t.projectId === '__expense__' ? '経費申請' : (p ? escHtml(p.name) : '');
   const projLink = t.projectId && t.projectId !== '__expense__' && p
-    ? '<span class="task-proj-link" onclick="event.stopPropagation();navigate(' + sq + 'project' + sq + ',' + sq + t.projectId + sq + ')">' + pname + '</span>'
-    : '<span class="text-muted">' + pname + '</span>';
-  return '<div class="task-card due-' + s + '" data-task-id="' + t.id + '" onclick="openRightSidebar(' + sq + t.id + sq + ')">'
-    + '<button class="task-check" onclick="event.stopPropagation();completeTask(' + sq + t.id + sq + ')" title="\u5b8c\u4e86\u306b\u3059\u308b"></button>'
-    + '<span class="task-drag-handle">\u283f</span>'
-    + '<div class="task-info">'
-    + '<div class="task-name">' + escHtml(t.name) + '</div>'
-    + '<div class="task-meta">'
-    + (showProj ? projLink : '')
-    + dueBadgeHtml(t.dueDate)
-    + (t.estimatedMinutes ? '<span class="task-estimate">\u23f1 ' + t.estimatedMinutes + '\u5206</span>' : '')
-    + (t.requestedAt ? '<span class="text-muted text-xs">\u4f9d\u983c: ' + fmtDate(t.requestedAt) + '</span>' : '')
-    + '</div></div></div>';
+    ? `<span class="task-proj-link" onclick="event.stopPropagation();navigate('project','${t.projectId}')">${pname}</span>`
+    : `<span class="text-muted">${pname}</span>`;
+  return `
+  <div class="task-card due-${s}" data-task-id="${t.id}" onclick="openRightSidebar('${t.id}')">
+    <button class="task-check" onclick="event.stopPropagation();completeTask('${t.id}')" title="完了にする"></button>
+    <span class="task-drag-handle">⠿</span>
+    <div class="task-info">
+      <div class="task-name">${escHtml(t.name)}</div>
+      <div class="task-meta">
+        ${showProj ? projLink : ''}
+        ${dueBadgeHtml(t.dueDate)}
+        ${t.estimatedMinutes ? `<span class="task-estimate">⏱ ${t.estimatedMinutes}分</span>` : ''}
+        ${t.requestedAt ? `<span class="text-muted text-xs">依頼: ${fmtDate(t.requestedAt)}</span>` : ''}
+      </div>
+    </div>
+  </div>`;
 }
-
 function switchTaskTab(tab) {
   currentTaskTab = tab;
   renderPage();
@@ -1593,27 +1603,22 @@ function completeTask(id) {
   closeRightSidebar();
 }
 function setupSortable() {
+  const container = document.getElementById('task-list-container');
+  if (!container || typeof Sortable === 'undefined') return;
   sortables.forEach(s => { try { s.destroy(); } catch(e){} });
   sortables = [];
-  if (typeof Sortable === 'undefined') return;
-  document.querySelectorAll('.task-group-container').forEach(container => {
-    const date = container.dataset.date;
-    const s = Sortable.create(container, {
-      animation: 150,
-      handle: '.task-drag-handle',
-      onEnd: () => {
-        const ids = [...container.querySelectorAll('[data-task-id]')].map(el => el.dataset.taskId);
-        const orderKey = 'date_' + date;
-        state.taskOrder[orderKey] = ids;
-        scheduleSave();
-      }
-    });
-    sortables.push(s);
+  const s = Sortable.create(container, {
+    animation: 150,
+    handle: '.task-drag-handle',
+    onEnd: () => {
+      const ids = [...container.querySelectorAll('[data-task-id]')].map(el => el.dataset.taskId);
+      state.taskOrder[`tab_${currentTaskTab}`] = ids;
+      scheduleSave();
+    }
   });
+  sortables.push(s);
 }
-function setupPageEvents() {
-  if (currentPage === 'tasklist') setTimeout(setupSortable, 100);
-}
+
 // ============================================================
 // NEW PROJECT (立件)
 // ============================================================
@@ -2438,8 +2443,6 @@ function openAddTaskModal(projectId) {
 function submitAddTask(projectId) {
   const name = (document.getElementById('at-name')?.value || '').trim();
   if (!name) { alert('タスク名を入力してください'); return; }
-  const dueDate = document.getElementById('at-dueDate')?.value ?? '';
-  if (!dueDate) { alert('完了予定日を入力してください'); return; }
   const t = {
     id: genId(), projectId,
     name,
