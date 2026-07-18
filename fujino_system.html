@@ -516,13 +516,21 @@ async function cryptoDeriveKey(password, salt) {
 }
 function hexToBytes(hex) { return new Uint8Array(hex.match(/.{2}/g).map(h => parseInt(h, 16))); }
 function bytesToHex(buf) { return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join(''); }
+function bytesToBase64(bytes) {
+  let binary = '';
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+  }
+  return btoa(binary);
+}
 async function encryptPayload(obj, password) {
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const iv   = crypto.getRandomValues(new Uint8Array(12));
   const key  = await cryptoDeriveKey(password, salt);
   const plain = new TextEncoder().encode(JSON.stringify(obj));
   const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, plain);
-  return { _enc: 1, salt: bytesToHex(salt), iv: bytesToHex(iv), ct: btoa(String.fromCharCode(...new Uint8Array(ct))) };
+  return { _enc: 1, salt: bytesToHex(salt), iv: bytesToHex(iv), ct: bytesToBase64(new Uint8Array(ct)) };
 }
 // 秘密の質問による回復データ保存
 async function saveRecoveryData() {
