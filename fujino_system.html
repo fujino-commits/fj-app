@@ -841,7 +841,8 @@ function openApiKeyModal() {
         </div>
       </div>
       <button class="btn btn-sm btn-gold" onclick="(()=>{
-        const u=document.getElementById('mailbe-url').value.trim().replace(/\/$/,'');
+        let u=document.getElementById('mailbe-url').value.trim();
+        if(u.endsWith('/')) u=u.slice(0,-1);
         const t=document.getElementById('mailbe-token').value.trim();
         if(!u||!t){alert('サーバーURLとAPIトークンの両方を入力してください');return;}
         localStorage.setItem('fujino_mail_backend_url',u);
