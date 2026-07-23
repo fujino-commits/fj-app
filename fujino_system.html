@@ -174,6 +174,27 @@ label{display:block;font-size:12px;color:var(--text2);margin-bottom:4px;}
 .due-today-badge{background:#2a1a00;color:var(--orange);}
 .due-future-badge{background:#0a1a2a;color:var(--blue);}
 .task-drag-handle{color:var(--text3);font-size:14px;cursor:grab;padding:2px 4px;}
+/* INBOX */
+.inbox-row{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:8px;cursor:pointer;transition:border-color .2s;}
+.inbox-row:hover{border-color:var(--border2);}
+.inbox-row-top{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text3);flex-wrap:wrap;}
+.inbox-status-badge{font-size:10px;padding:2px 7px;border-radius:3px;font-weight:700;flex-shrink:0;}
+.status-open{background:#2a1a00;color:var(--orange);}
+.status-done{background:#0a2a0a;color:var(--green);}
+.status-ignored{background:#1a1a1a;color:var(--text3);}
+.status-other{background:#0a1a2a;color:var(--blue);}
+.inbox-sender{color:var(--text2);font-weight:600;}
+.inbox-project{color:var(--gold);}
+.inbox-time{margin-left:auto;flex-shrink:0;}
+.inbox-subject{font-size:13px;font-weight:600;margin-top:6px;}
+.inbox-snippet{font-size:12px;color:var(--text3);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.inbox-detail-grid{display:grid;grid-template-columns:1.3fr 1fr;gap:16px;align-items:start;}
+@media (max-width:900px){.inbox-detail-grid{grid-template-columns:1fr;}}
+.inbox-panel{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:14px;}
+.inbox-panel-title{font-size:13px;font-weight:700;color:var(--gold);margin-bottom:10px;}
+.inbox-body-text{white-space:pre-wrap;font-size:13px;line-height:1.6;color:var(--text2);max-height:400px;overflow-y:auto;}
+.inbox-hint-box{background:#2a1a00;color:var(--orange);font-size:12px;padding:8px 10px;border-radius:6px;margin-bottom:10px;}
+.inbox-candidate-box{background:var(--bg3);border-radius:6px;padding:8px 10px;margin-bottom:8px;font-size:12px;}
 .add-task-btn{display:flex;align-items:center;gap:8px;padding:10px 14px;border-radius:8px;border:1px dashed var(--border2);background:none;color:var(--text3);width:100%;font-size:13px;transition:all .2s;margin-bottom:8px;}
 .add-task-btn:hover{border-color:var(--gold);color:var(--gold);}
 .task-estimate{font-size:10px;background:var(--bg3);padding:2px 6px;border-radius:3px;color:var(--text3);}
@@ -402,6 +423,9 @@ label{display:block;font-size:12px;color:var(--text2);margin-bottom:4px;}
         <button class="collapse-btn" onclick="toggleSidebar()" title="サイドバーを閉じる">◁</button>
       </div>
       <div class="sidebar-nav">
+        <button class="nav-btn" data-page="inbox" onclick="navigate('inbox')">
+          <span class="icon">📥</span>受信箱
+        </button>
         <button class="nav-btn" data-page="tasklist" onclick="navigate('tasklist')">
           <span class="icon">✓</span>タスクリスト
         </button>
@@ -471,10 +495,13 @@ let state = {
   taskOrder: {},  // tabKey -> [taskId, ...]
   settings: { sidebarOpen: true },
   activeTimer: null, // { projectId, startTime }
+  inbox: {},      // id -> inbox message
 };
 let currentPage = 'dashboard';
 let currentProjectId = null;
 let currentTaskTab = 'today';
+let currentInboxId = null;
+let currentInboxTab = 'open';
 let rightSbTaskId = null;
 let calWeekOffset = 0;
 let salesMonth = { y: new Date().getFullYear(), m: new Date().getMonth() };
@@ -580,6 +607,7 @@ async function syncToGist() {
     projects: state.projects, tasks: state.tasks, sales: state.sales,
     timeEntries: state.timeEntries, taskOrder: state.taskOrder,
     settings: state.settings, activeTimer: state.activeTimer,
+    inbox: state.inbox,
     updatedAt: new Date().toISOString()
   };
   try {
@@ -650,6 +678,7 @@ async function loadFromGist() {
     state.taskOrder   = d.taskOrder   || {};
     state.settings    = d.settings    || { sidebarOpen: true };
     state.activeTimer = d.activeTimer || null;
+    state.inbox       = d.inbox       || {};
     saveLocal();
     return true;
   } catch(e) { console.warn('Gist load error:', e); showSyncBadge('⚠ Gist読み込みエラー', true); }
@@ -768,6 +797,33 @@ function openApiKeyModal() {
         alert('回復データを保存しました。');
         openApiKeyModal();
       })()">回復データを保存</button>
+    </div>
+    <div class="form-field" style="border-top:1px solid var(--border);margin-top:8px;padding-top:12px;">
+      <label>🤖 Anthropic APIキー（受信箱のAI機能用）</label>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:6px;">案件判定・返信ドラフト・タスク提案に使用します。console.anthropic.com で発行したキーを入力してください。ブラウザから直接呼び出すため、キーはこの端末のlocalStorageに保存されます。</div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <input id="anthropic-key-display" type="password" value="${escHtml(localStorage.getItem('fujino_anthropic_key')||'')}" placeholder="sk-ant-..." style="flex:1;font-family:monospace;font-size:12px;">
+        <button class="btn btn-outline btn-sm" onclick="
+          const inp=document.getElementById('anthropic-key-display');
+          inp.type=inp.type==='password'?'text':'password';
+          this.textContent=inp.type==='password'?'表示':'隠す';
+        ">表示</button>
+      </div>
+      <div style="margin-top:6px;">
+        <label style="font-size:11px;">使用モデル</label>
+        <select id="anthropic-model-select" style="font-size:12px;">
+          <option value="claude-haiku-4-5" ${localStorage.getItem('fujino_anthropic_model')==='claude-haiku-4-5'||!localStorage.getItem('fujino_anthropic_model')?'selected':''}>Haiku 4.5（速い・安い）</option>
+          <option value="claude-sonnet-5" ${localStorage.getItem('fujino_anthropic_model')==='claude-sonnet-5'?'selected':''}>Sonnet 5（高品質）</option>
+        </select>
+      </div>
+      <button class="btn btn-sm btn-gold" style="margin-top:6px;" onclick="(()=>{
+        const v=document.getElementById('anthropic-key-display').value.trim();
+        const m=document.getElementById('anthropic-model-select').value;
+        if(!v){alert('APIキーを入力してください');return;}
+        localStorage.setItem('fujino_anthropic_key',v);
+        localStorage.setItem('fujino_anthropic_model',m);
+        alert('Anthropic APIキーを保存しました');
+      })()">保存</button>
     </div>
     <div class="modal-footer" style="flex-wrap:wrap;gap:8px;">
       <button class="btn btn-gold btn-sm" onclick="(async()=>{
@@ -1249,9 +1305,10 @@ function checkRecurringTasks() {
 function navigate(page, projectId) {
   currentPage = page;
   currentProjectId = projectId || null;
-  // Update nav highlights
+  // Update nav highlights ('inboxdetail' highlights the '受信箱' nav button)
+  const highlightPage = page === 'inboxdetail' ? 'inbox' : page;
   document.querySelectorAll('.nav-btn[data-page]').forEach(b => {
-    b.classList.toggle('active', b.dataset.page === page);
+    b.classList.toggle('active', b.dataset.page === highlightPage);
   });
   // Update sidebar project highlight
   document.querySelectorAll('.proj-item').forEach(b => {
@@ -1260,6 +1317,10 @@ function navigate(page, projectId) {
   // Close mobile sidebar
   document.getElementById('sidebar').classList.remove('mobile-open');
   renderPage();
+}
+function openInboxDetail(id) {
+  currentInboxId = id;
+  navigate('inboxdetail');
 }
 function renderPage() {
   const root = document.getElementById('page-root');
@@ -1271,6 +1332,8 @@ function renderPage() {
   else if (currentPage === 'salesmonthly') root.innerHTML = renderSalesMonthly();
   else if (currentPage === 'salesannual') root.innerHTML = renderSalesAnnual();
   else if (currentPage === 'unpaid') root.innerHTML = renderUnpaidPage();
+  else if (currentPage === 'inbox') root.innerHTML = renderInboxList();
+  else if (currentPage === 'inboxdetail') root.innerHTML = renderInboxDetail(currentInboxId);
   setupPageEvents();
 }
 
@@ -2534,6 +2597,323 @@ function submitAddTask(projectId) {
   renderSidebar();
   renderPage();
   setTimeout(setupProjectSortable, 100);
+}
+
+// ============================================================
+// INBOX（受信箱）
+// ============================================================
+const INBOX_TABS = [
+  { key:'open', label:'未対応' },
+  { key:'done', label:'完了' },
+  { key:'ignored', label:'無視' },
+  { key:'other', label:'他担当' },
+  { key:'all', label:'全て' },
+];
+function fmtDateTime(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (isNaN(d)) return iso;
+  return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+}
+function getInboxForTab(tab) {
+  let msgs = Object.values(state.inbox || {});
+  if (tab !== 'all') msgs = msgs.filter(m => m.status === tab);
+  return msgs.sort((a, b) => (b.receivedAt || '').localeCompare(a.receivedAt || ''));
+}
+function renderInboxList() {
+  const msgs = getInboxForTab(currentInboxTab);
+  const listHtml = !msgs.length
+    ? `<div class="empty-state"><div class="empty-icon">📭</div><p>このタブにメッセージはありません</p></div>`
+    : msgs.map(m => inboxRowHtml(m)).join('');
+  return `
+  <div class="page-header"><h1 class="page-title">受信<span>箱</span></h1>
+    <button class="btn btn-gold btn-sm" onclick="openAddInboxModal()">＋ 手動で追加</button>
+  </div>
+  <div class="page-content">
+    <div class="task-tabs">
+      ${INBOX_TABS.map(tb => `<button class="tab-btn ${currentInboxTab===tb.key?'active':''}" onclick="switchInboxTab('${tb.key}')">${tb.label}</button>`).join('')}
+    </div>
+    <div id="inbox-list-container">${listHtml}</div>
+  </div>`;
+}
+function inboxRowHtml(m) {
+  const p = m.projectId ? state.projects[m.projectId] : null;
+  const projLabel = p ? escHtml(p.name) : '案件未推定';
+  const statusLabel = { open:'未対応', done:'完了', ignored:'無視', other:'他担当' }[m.status] || m.status;
+  const icon = m.source === 'slack' ? '#' : '✉';
+  const snippet = escHtml((m.body || '').replace(/\s+/g, ' ').slice(0, 100));
+  return `
+  <div class="inbox-row" onclick="openInboxDetail('${m.id}')">
+    <div class="inbox-row-top">
+      <span class="inbox-status-badge status-${m.status}">${statusLabel}</span>
+      <span>${icon}</span>
+      <span class="inbox-sender">${escHtml(m.sender || '(差出人不明)')}</span>
+      <span>→</span>
+      <span class="inbox-project">${projLabel}</span>
+      <span class="inbox-time">${fmtDateTime(m.receivedAt)}</span>
+    </div>
+    <div class="inbox-subject">${escHtml(m.subject || '(件名なし)')}</div>
+    <div class="inbox-snippet">${snippet}</div>
+  </div>`;
+}
+function switchInboxTab(tab) {
+  currentInboxTab = tab;
+  renderPage();
+}
+function openAddInboxModal() {
+  openModal(`
+    <div class="modal-title">メールを手動で追加</div>
+    <div class="form-field"><label>差出人</label><input id="ai-sender" placeholder="例: 株式会社〇〇 山田様"></div>
+    <div class="form-field"><label>件名</label><input id="ai-subject" placeholder="件名を入力"></div>
+    <div class="form-field"><label>本文</label><textarea id="ai-body" rows="8" placeholder="メール本文を貼り付け"></textarea></div>
+    <div class="form-field">
+      <label>種別</label>
+      <select id="ai-source"><option value="email">メール</option><option value="slack">Slack</option></select>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal()">キャンセル</button>
+      <button class="btn btn-gold" onclick="submitAddInbox()">追加</button>
+    </div>
+  `);
+  setTimeout(() => document.getElementById('ai-sender')?.focus(), 50);
+}
+function submitAddInbox() {
+  const sender = (document.getElementById('ai-sender')?.value || '').trim();
+  const subject = (document.getElementById('ai-subject')?.value || '').trim();
+  const body = (document.getElementById('ai-body')?.value || '').trim();
+  const source = document.getElementById('ai-source')?.value || 'email';
+  if (!subject && !body) { alert('件名または本文を入力してください'); return; }
+  const m = {
+    id: genId(), source, sender, subject, body,
+    receivedAt: new Date().toISOString(),
+    status: 'open',
+    projectId: null,
+    aiCandidateProjectId: null, aiConfidence: null,
+    replyInstruction: '', replyDraft: '',
+  };
+  state.inbox[m.id] = m;
+  scheduleSave();
+  closeModal();
+  navigate('inbox');
+}
+function renderInboxDetail(id) {
+  const m = state.inbox[id];
+  if (!m) return `<div class="page-header"><h1 class="page-title">受信箱 <span>詳細</span></h1></div><div class="page-content"><p>メッセージが見つかりません。</p></div>`;
+  const p = m.projectId ? state.projects[m.projectId] : null;
+  const cand = m.aiCandidateProjectId ? state.projects[m.aiCandidateProjectId] : null;
+  return `
+  <div class="page-header"><h1 class="page-title">受信箱 <span>詳細</span></h1></div>
+  <div class="page-content">
+    <div style="margin-bottom:10px;"><a href="javascript:void(0)" onclick="navigate('inbox')" style="color:var(--text3);font-size:12px;">← このメールのフォルダー一覧に戻る</a></div>
+    <div class="inbox-detail-grid">
+      <div>
+        <div class="inbox-panel">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+            <div class="inbox-panel-title">受信メッセージ</div>
+            <div style="display:flex;gap:6px;">
+              <button class="btn btn-outline btn-sm" onclick="aiRunAll('${m.id}', this)">🤖 AI</button>
+              <button class="btn btn-gold btn-sm" onclick="markInboxStatus('${m.id}','done')">✓ 完了</button>
+              <button class="btn btn-outline btn-sm" onclick="markInboxStatus('${m.id}','ignored')">無視</button>
+            </div>
+          </div>
+          <div style="font-size:12px;color:var(--text3);">差出人: ${escHtml(m.sender || '—')}</div>
+          <div style="font-size:14px;font-weight:700;margin-top:4px;">件名: ${escHtml(m.subject || '(件名なし)')}</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px;">${fmtDateTime(m.receivedAt)}</div>
+          <hr class="sidebar-divider">
+          <div class="inbox-body-text">${escHtml(m.body || '(本文なし)')}</div>
+        </div>
+      </div>
+      <div>
+        <div class="inbox-panel">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div class="inbox-panel-title">案件の紐づけ</div>
+            <button class="btn btn-outline btn-sm" onclick="aiClassifyProject('${m.id}', this)">🤖 AIで案件判定</button>
+          </div>
+          <div style="font-size:11px;color:var(--text3);margin-top:6px;">AIが判定した案件候補${m.aiConfidence ? `（信頼度: ${escHtml(m.aiConfidence)}）` : ''}</div>
+          <div class="inbox-candidate-box">${cand ? escHtml(cand.name) : '候補はありません。'}</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:10px;">紐づけられた関連案件</div>
+          <div class="inbox-candidate-box">現在: ${p ? escHtml(p.name) : '未紐づけ'}</div>
+          <button class="btn btn-outline btn-sm" onclick="openInboxProjectPicker('${m.id}')">正しい案件を選択</button>
+        </div>
+        <div class="inbox-panel">
+          <div class="inbox-panel-title">返信を作成</div>
+          <div class="form-field"><label>返信内容を簡単に（任意）</label><textarea id="reply-summary-${m.id}" rows="2" placeholder="ex.確認して改めてご連絡します">${escHtml(m.replyInstruction || '')}</textarea></div>
+          <button class="btn btn-outline btn-sm" onclick="aiGenerateReply('${m.id}', this)">🤖 返信ドラフトを作る</button>
+          <div class="form-field" style="margin-top:10px;"><label>返信ドラフト</label><textarea id="reply-draft-${m.id}" rows="6" placeholder="ここに返信文を作成・編集できます">${escHtml(m.replyDraft || '')}</textarea></div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <button class="btn btn-outline btn-sm" onclick="saveInboxReplyDraft('${m.id}')">下書き保存</button>
+            <button class="btn btn-outline btn-sm" onclick="copyInboxReplyDraft('${m.id}')">ドラフトをコピー</button>
+          </div>
+          <div style="font-size:11px;color:var(--text3);margin-top:6px;">※このアプリからは直接送信できません。コピーして外部メーラ/Slackで送信してください。</div>
+        </div>
+        <div class="inbox-panel">
+          <div class="inbox-panel-title">タスクを作成</div>
+          ${!m.projectId ? `<div class="inbox-hint-box">紐づけられた案件がありません。先に案件の紐づけをお勧めします。</div>` : ''}
+          <div class="form-field"><label>タスク名</label><input id="inbox-task-name-${m.id}" placeholder="タスク名"></div>
+          <div class="form-field"><label>メモ</label><textarea id="inbox-task-memo-${m.id}" rows="2"></textarea></div>
+          <div class="form-field"><label>期限</label><input id="inbox-task-due-${m.id}" type="date"></div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <button class="btn btn-gold btn-sm" onclick="submitInboxTask('${m.id}')">タスクを追加</button>
+            <button class="btn btn-outline btn-sm" onclick="aiSuggestTask('${m.id}', this)">🤖 AIでタスクを提案</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+function markInboxStatus(id, status) {
+  const m = state.inbox[id];
+  if (!m) return;
+  m.status = status;
+  scheduleSave();
+  navigate('inbox');
+}
+function openInboxProjectPicker(id) {
+  const activeProjects = Object.values(state.projects).filter(p => !p.closed);
+  openModal(`
+    <div class="modal-title">案件を選択</div>
+    <input id="inbox-proj-search" type="text" placeholder="案件名で検索..." style="margin-bottom:10px;" oninput="filterInboxProjPicker(this.value)">
+    <div id="inbox-proj-picker-list" style="max-height:340px;overflow-y:auto;">
+      ${activeProjects.map(p => `<div class="inbox-proj-picker-item" data-name="${escHtml((p.name || '').toLowerCase())}" style="padding:8px 10px;border-radius:6px;cursor:pointer;" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background='none'" onclick="assignInboxProject('${id}','${p.id}')">${escHtml(p.name || '(無題)')}</div>`).join('')}
+    </div>
+    <div class="modal-footer"><button class="btn btn-outline" onclick="closeModal()">キャンセル</button></div>
+  `);
+}
+function filterInboxProjPicker(v) {
+  const q = v.toLowerCase();
+  document.querySelectorAll('.inbox-proj-picker-item').forEach(el => {
+    el.style.display = el.dataset.name.includes(q) ? '' : 'none';
+  });
+}
+function assignInboxProject(inboxId, projectId) {
+  const m = state.inbox[inboxId];
+  if (!m) return;
+  m.projectId = projectId;
+  scheduleSave();
+  closeModal();
+  renderPage();
+}
+function saveInboxReplyDraft(id) {
+  const m = state.inbox[id];
+  if (!m) return;
+  m.replyInstruction = document.getElementById(`reply-summary-${id}`)?.value || '';
+  m.replyDraft = document.getElementById(`reply-draft-${id}`)?.value || '';
+  scheduleSave();
+  alert('下書きを保存しました');
+}
+function copyInboxReplyDraft(id) {
+  const text = document.getElementById(`reply-draft-${id}`)?.value || '';
+  if (!text) { alert('コピーする内容がありません'); return; }
+  navigator.clipboard.writeText(text).then(() => alert('コピーしました')).catch(() => alert('コピーに失敗しました'));
+}
+function submitInboxTask(id) {
+  const m = state.inbox[id];
+  if (!m) return;
+  const name = (document.getElementById(`inbox-task-name-${id}`)?.value || '').trim();
+  if (!name) { alert('タスク名を入力してください'); return; }
+  const t = {
+    id: genId(), projectId: m.projectId || null,
+    name,
+    requestedAt: todayStr(),
+    dueDate: document.getElementById(`inbox-task-due-${id}`)?.value || '',
+    estimatedMinutes: 0,
+    memo: document.getElementById(`inbox-task-memo-${id}`)?.value || '',
+    completed: false, completedAt: null, order: Date.now(),
+  };
+  state.tasks[t.id] = t;
+  scheduleSave();
+  renderSidebar();
+  alert('タスクを追加しました');
+  renderPage();
+}
+
+// Claude API 呼び出し（ブラウザから直接。ユーザー自身のAPIキーを使用）
+async function callClaude(systemPrompt, userPrompt) {
+  const key = localStorage.getItem('fujino_anthropic_key');
+  if (!key) { alert('Anthropic APIキーが未設定です。サイドバーの「⚙ API設定確認」から設定してください。'); return null; }
+  const model = localStorage.getItem('fujino_anthropic_model') || 'claude-haiku-4-5';
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': key,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: 1024,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userPrompt }],
+      }),
+    });
+    const json = await res.json();
+    if (json.error) { alert('AI呼び出しエラー: ' + (json.error.message || JSON.stringify(json.error))); return null; }
+    const textBlock = (json.content || []).find(b => b.type === 'text');
+    return textBlock ? textBlock.text : null;
+  } catch (e) {
+    alert('AI呼び出しに失敗しました: ' + e.message);
+    return null;
+  }
+}
+async function aiClassifyProject(id, btn) {
+  const m = state.inbox[id];
+  if (!m) return;
+  const projects = Object.values(state.projects).filter(p => !p.closed);
+  if (!projects.length) { alert('案件が登録されていません'); return; }
+  const list = projects.map(p => `${p.id}: ${p.name}`).join('\n');
+  const sys = 'あなたは法律事務所の案件管理アシスタントです。メールやSlackメッセージの内容から、どの案件に関連するかを判定します。';
+  const usr = `以下は登録されている案件の一覧です。\n${list}\n\n以下のメッセージが、上記のうちどの案件に最も関連するか判定してください。\n差出人: ${m.sender || ''}\n件名: ${m.subject || ''}\n本文: ${(m.body || '').slice(0, 2000)}\n\n出力は以下の形式のみで答えてください（説明不要）:\n案件ID: <該当する案件のID、該当なしならNONE>\n信頼度: <高/中/低>`;
+  if (btn) { btn.disabled = true; btn.textContent = '判定中...'; }
+  const result = await callClaude(sys, usr);
+  if (btn) { btn.disabled = false; btn.textContent = '🤖 AIで案件判定'; }
+  if (!result) return;
+  const idMatch = result.match(/案件ID[:：]\s*([^\s\n]+)/);
+  const confMatch = result.match(/信頼度[:：]\s*([^\s\n]+)/);
+  const candId = idMatch ? idMatch[1].trim() : null;
+  m.aiCandidateProjectId = (candId && candId !== 'NONE' && state.projects[candId]) ? candId : null;
+  m.aiConfidence = confMatch ? confMatch[1].trim() : null;
+  scheduleSave();
+  renderPage();
+}
+async function aiGenerateReply(id, btn) {
+  const m = state.inbox[id];
+  if (!m) return;
+  const instruction = document.getElementById(`reply-summary-${id}`)?.value || '';
+  const p = m.projectId ? state.projects[m.projectId] : null;
+  const sys = 'あなたは日本の法律事務所の秘書アシスタントです。丁寧なビジネス日本語でメール返信文を作成します。';
+  const usr = `以下の受信メッセージへの返信メールを作成してください。\n${p ? `関連案件: ${p.name}\n` : ''}差出人: ${m.sender || ''}\n件名: ${m.subject || ''}\n本文:\n${(m.body || '').slice(0, 3000)}\n\n返信の方向性（任意）: ${instruction || '（特になし。内容を踏まえ丁寧に返信）'}\n\n本文のみを出力してください（件名や署名は不要です）。`;
+  if (btn) { btn.disabled = true; btn.textContent = '生成中...'; }
+  const result = await callClaude(sys, usr);
+  if (btn) { btn.disabled = false; btn.textContent = '🤖 返信ドラフトを作る'; }
+  if (!result) return;
+  m.replyDraft = result.trim();
+  m.replyInstruction = instruction;
+  scheduleSave();
+  renderPage();
+}
+async function aiSuggestTask(id, btn) {
+  const m = state.inbox[id];
+  if (!m) return;
+  const sys = 'あなたは法律事務所の業務管理アシスタントです。メッセージ内容から必要な対応タスクを1つ提案します。';
+  const usr = `以下のメッセージから、対応すべきタスクを1つ提案してください。\n件名: ${m.subject || ''}\n本文:\n${(m.body || '').slice(0, 2000)}\n\n出力形式（説明不要、この形式のみ）:\nタスク名: <20文字程度の簡潔なタスク名>\nメモ: <補足事項があれば1-2行>`;
+  if (btn) { btn.disabled = true; btn.textContent = '提案中...'; }
+  const result = await callClaude(sys, usr);
+  if (btn) { btn.disabled = false; btn.textContent = '🤖 AIでタスクを提案'; }
+  if (!result) return;
+  const nameMatch = result.match(/タスク名[:：]\s*(.+)/);
+  const memoMatch = result.match(/メモ[:：]\s*([\s\S]+)/);
+  const nameEl = document.getElementById(`inbox-task-name-${id}`);
+  const memoEl = document.getElementById(`inbox-task-memo-${id}`);
+  if (nameEl && nameMatch) nameEl.value = nameMatch[1].trim();
+  if (memoEl && memoMatch) memoEl.value = memoMatch[1].trim();
+}
+async function aiRunAll(id, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = '実行中...'; }
+  await aiClassifyProject(id, null);
+  await aiGenerateReply(id, null);
+  if (btn) { btn.disabled = false; btn.textContent = '🤖 AI'; }
 }
 
 // ============================================================
