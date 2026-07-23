@@ -826,6 +826,43 @@ function openApiKeyModal() {
         alert('Anthropic APIキーを保存しました');
       })()">保存</button>
     </div>
+    <div class="form-field" style="border-top:1px solid var(--border);margin-top:8px;padding-top:12px;">
+      <label>📧 メール連携（IMAP中継サーバー）</label>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:6px;">受信箱の「📥 メールを取り込む」から実メールを取得するための中継サーバー（fj-mail-backend）の情報です。</div>
+      <div class="form-field"><label style="font-size:11px;">サーバーURL</label><input id="mailbe-url" type="text" value="${escHtml(localStorage.getItem('fujino_mail_backend_url')||'')}" placeholder="https://fj-mail-backend-xxxx.onrender.com" style="font-family:monospace;font-size:12px;"></div>
+      <div class="form-field"><label style="font-size:11px;">APIトークン</label>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input id="mailbe-token" type="password" value="${escHtml(localStorage.getItem('fujino_mail_backend_token')||'')}" style="flex:1;font-family:monospace;font-size:12px;">
+          <button class="btn btn-outline btn-sm" onclick="
+            const inp=document.getElementById('mailbe-token');
+            inp.type=inp.type==='password'?'text':'password';
+            this.textContent=inp.type==='password'?'表示':'隠す';
+          ">表示</button>
+        </div>
+      </div>
+      <button class="btn btn-sm btn-gold" onclick="(()=>{
+        const u=document.getElementById('mailbe-url').value.trim().replace(/\/$/,'');
+        const t=document.getElementById('mailbe-token').value.trim();
+        if(!u||!t){alert('サーバーURLとAPIトークンの両方を入力してください');return;}
+        localStorage.setItem('fujino_mail_backend_url',u);
+        localStorage.setItem('fujino_mail_backend_token',t);
+        alert('メール連携設定を保存しました');
+      })()">保存</button>
+      <button class="btn btn-sm btn-outline" onclick="(async()=>{
+        const el=document.getElementById('mailbe-test-result');
+        el.textContent='接続確認中...'; el.style.color='var(--text2)';
+        const u=localStorage.getItem('fujino_mail_backend_url');
+        const t=localStorage.getItem('fujino_mail_backend_token');
+        if(!u||!t){el.textContent='未設定です。先に保存してください';el.style.color='var(--red)';return;}
+        try{
+          const res=await fetch(u+'/messages?limit=1',{headers:{'Authorization':'Bearer '+t}});
+          const json=await res.json();
+          if(res.ok){el.textContent='✅ 接続成功！';el.style.color='var(--green)';}
+          else{el.textContent='❌ エラー: '+(json.error||res.status);el.style.color='var(--red)';}
+        }catch(e){el.textContent='❌ 接続失敗: '+e.message;el.style.color='var(--red)';}
+      })()">接続テスト</button>
+      <div id="mailbe-test-result" style="font-size:12px;margin-top:6px;"></div>
+    </div>
     <div class="modal-footer" style="flex-wrap:wrap;gap:8px;">
       <button class="btn btn-gold btn-sm" onclick="(async()=>{
         if(!gistToken||gistToken==='none'){alert('GitHubトークンが設定されていません');return;}
@@ -2631,6 +2668,7 @@ function renderInboxList() {
     : msgs.map(m => inboxRowHtml(m)).join('');
   return `
   <div class="page-header"><h1 class="page-title">受信<span>箱</span></h1>
+    <button class="btn btn-outline btn-sm" onclick="openMailImportModal()">📥 メールを取り込む</button>
     <button class="btn btn-gold btn-sm" onclick="openAddInboxModal()">＋ 手動で追加</button>
   </div>
   <div class="page-content">
@@ -2701,6 +2739,79 @@ function seedSampleInboxData() {
   scheduleSave();
   renderPage();
 }
+
+// ============================================================
+// メール取り込み（fj-mail-backend 経由でIMAPサーバーから取得）
+// ============================================================
+function mailBackendConfig() {
+  const url = localStorage.getItem('fujino_mail_backend_url');
+  const token = localStorage.getItem('fujino_mail_backend_token');
+  return { url, token };
+}
+async function openMailImportModal() {
+  const { url, token } = mailBackendConfig();
+  if (!url || !token) {
+    alert('先にサイドバーの「⚙ API設定確認」でメール連携サーバーのURLとAPIトークンを設定してください。');
+    return;
+  }
+  openModal(`
+    <div class="modal-title">メールを取り込む</div>
+    <div id="mail-import-list" style="max-height:420px;overflow-y:auto;font-size:13px;">読み込み中...</div>
+    <div class="modal-footer"><button class="btn btn-outline" onclick="closeModal()">閉じる</button></div>
+  `);
+  try {
+    const res = await fetch(`${url}/messages?limit=20`, { headers: { Authorization: `Bearer ${token}` } });
+    const json = await res.json();
+    const listEl = document.getElementById('mail-import-list');
+    if (!res.ok) { listEl.innerHTML = `<p style="color:var(--red);">エラー: ${escHtml(json.error || res.status)}</p>`; return; }
+    const already = new Set(Object.values(state.inbox).map(m => m.sourceUid).filter(Boolean));
+    const msgs = json.messages || [];
+    if (!msgs.length) { listEl.innerHTML = `<p style="color:var(--text3);">メールがありません</p>`; return; }
+    listEl.innerHTML = msgs.map(m => `
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 4px;border-bottom:1px solid var(--border);">
+        <div style="min-width:0;">
+          <div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${m.hasAttachments ? '📎 ' : ''}${escHtml(m.subject)}</div>
+          <div style="font-size:11px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escHtml(m.from)} / ${fmtDateTime(m.date)}</div>
+        </div>
+        ${already.has(m.uid) ? `<span style="font-size:11px;color:var(--text3);flex-shrink:0;">取込済</span>` : `<button class="btn btn-gold btn-sm" style="flex-shrink:0;" onclick="importMailMessage(${m.uid}, this)">取り込む</button>`}
+      </div>`).join('');
+  } catch (e) {
+    const listEl = document.getElementById('mail-import-list');
+    if (listEl) listEl.innerHTML = `<p style="color:var(--red);">接続失敗: ${escHtml(e.message)}</p>`;
+  }
+}
+async function importMailMessage(uid, btn) {
+  const { url, token } = mailBackendConfig();
+  if (btn) { btn.disabled = true; btn.textContent = '取込中...'; }
+  try {
+    const res = await fetch(`${url}/messages/${uid}`, { headers: { Authorization: `Bearer ${token}` } });
+    const detail = await res.json();
+    if (!res.ok) { alert('取り込みエラー: ' + (detail.error || res.status)); if (btn) { btn.disabled = false; btn.textContent = '取り込む'; } return; }
+    const attachments = [];
+    for (const a of (detail.attachments || [])) {
+      const ar = await fetch(`${url}/messages/${uid}/attachments/${a.index}`, { headers: { Authorization: `Bearer ${token}` } });
+      const ad = await ar.json();
+      if (ar.ok) attachments.push({ name: ad.filename, mimeType: ad.contentType, size: a.size, dataBase64: ad.dataBase64 });
+    }
+    const id = genId();
+    state.inbox[id] = {
+      id, source: 'email', sourceUid: uid,
+      sender: detail.from || '', subject: detail.subject || '(件名なし)', body: detail.text || '',
+      receivedAt: detail.date || new Date().toISOString(),
+      status: 'open', projectId: null,
+      aiCandidateProjectId: null, aiConfidence: null,
+      replyInstruction: '', replyDraft: '',
+      attachments, review: null,
+    };
+    scheduleSave();
+    closeModal();
+    navigate('inbox');
+  } catch (e) {
+    alert('取り込みに失敗しました: ' + e.message);
+    if (btn) { btn.disabled = false; btn.textContent = '取り込む'; }
+  }
+}
+
 function openAddInboxModal() {
   openModal(`
     <div class="modal-title">メールを手動で追加</div>
