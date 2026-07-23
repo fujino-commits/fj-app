@@ -6,6 +6,7 @@
 <title>藤野晃司完全管理システム</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mammoth@1.7.2/mammoth.browser.min.js"></script>
 <style>
 :root {
   --bg: #0a0a0a;
@@ -2917,12 +2918,15 @@ function renderInboxDetail(id) {
         </div>
         <div class="inbox-panel">
           <div class="inbox-panel-title">案件の検討（AI）</div>
-          <div style="font-size:11px;color:var(--text3);margin-bottom:6px;">添付ファイル</div>
+          <div style="font-size:11px;color:var(--text3);margin-bottom:6px;">添付ファイル<span style="color:var(--orange);">（安全のため「読み込む」を押すまでファイルの中身は解析されません）</span></div>
           <div>
-            ${(m.attachments || []).map((a, i) => `<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:4px 0;">
-              <span>📎 ${escHtml(a.name)} <span style="color:var(--text3);">(${fmtFileSize(a.size)})</span></span>
-              <button class="btn btn-outline btn-sm" style="padding:2px 8px;" onclick="removeInboxAttachment('${m.id}',${i})">削除</button>
-            </div>`).join('') || `<div style="font-size:12px;color:var(--text3);">添付ファイルはありません（PDF・画像・テキストに対応）</div>`}
+            ${(m.attachments || []).map((a, i) => `<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:4px 0;gap:8px;">
+              <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">📎 ${escHtml(a.name)} <span style="color:var(--text3);">(${fmtFileSize(a.size)})</span></span>
+              <span style="display:flex;gap:6px;flex-shrink:0;">
+                ${a.loaded ? `<span style="color:var(--green);">✓ 読み込み済み</span>` : `<button class="btn btn-gold btn-sm" style="padding:2px 8px;" onclick="loadInboxAttachment('${m.id}',${i},this)">読み込む</button>`}
+                <button class="btn btn-outline btn-sm" style="padding:2px 8px;" onclick="removeInboxAttachment('${m.id}',${i})">削除</button>
+              </span>
+            </div>`).join('') || `<div style="font-size:12px;color:var(--text3);">添付ファイルはありません（PDF・Word・画像・テキストに対応）</div>`}
           </div>
           <div style="margin-top:6px;">
             <input type="file" id="review-file-input-${m.id}" multiple style="display:none;" onchange="addInboxAttachment('${m.id}', this)">
@@ -3158,6 +3162,35 @@ function removeInboxAttachment(id, idx) {
   scheduleSave();
   renderPage();
 }
+function isDocxAttachment(a) {
+  return a.mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    || /\.docx$/i.test(a.name || '');
+}
+// 「読み込む」を押した時だけファイルの中身を解析する（安全のため自動解析はしない）
+async function loadInboxAttachment(id, idx, btn) {
+  const m = state.inbox[id];
+  if (!m || !m.attachments || !m.attachments[idx]) return;
+  const a = m.attachments[idx];
+  if (btn) { btn.disabled = true; btn.textContent = '読込中...'; }
+  try {
+    if (isDocxAttachment(a)) {
+      if (typeof mammoth === 'undefined') {
+        alert('docx変換ライブラリの読み込みに失敗しました（通信環境をご確認ください）');
+        if (btn) { btn.disabled = false; btn.textContent = '読み込む'; }
+        return;
+      }
+      const bytes = Uint8Array.from(atob(a.dataBase64), c => c.charCodeAt(0));
+      const result = await mammoth.extractRawText({ arrayBuffer: bytes.buffer });
+      a.extractedText = result.value;
+    }
+    a.loaded = true;
+    scheduleSave();
+    renderPage();
+  } catch (e) {
+    alert('ファイルの読み込みに失敗しました: ' + e.message);
+    if (btn) { btn.disabled = false; btn.textContent = '読み込む'; }
+  }
+}
 async function startCaseReview(id, btn) {
   const m = state.inbox[id];
   if (!m) return;
@@ -3166,11 +3199,15 @@ async function startCaseReview(id, btn) {
   const attachments = m.attachments || [];
   const content = [];
   const unsupported = [];
+  const notLoaded = [];
   attachments.forEach(a => {
+    if (!a.loaded) { notLoaded.push(a.name); return; }
     if (a.mimeType === 'application/pdf') {
       content.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: a.dataBase64 } });
     } else if (/^image\/(png|jpeg|jpg|gif|webp)$/.test(a.mimeType)) {
       content.push({ type: 'image', source: { type: 'base64', media_type: a.mimeType, data: a.dataBase64 } });
+    } else if (isDocxAttachment(a)) {
+      content.push({ type: 'text', text: `【添付ファイル: ${a.name}】\n${(a.extractedText || '').slice(0, 8000)}` });
     } else if (a.mimeType.startsWith('text/')) {
       try {
         const text = decodeURIComponent(escape(atob(a.dataBase64)));
@@ -3180,9 +3217,12 @@ async function startCaseReview(id, btn) {
       unsupported.push(a.name);
     }
   });
+  let note = '';
+  if (notLoaded.length) note += `\n（注: 次のファイルは「読み込む」が押されていないため含まれていません: ${notLoaded.join('、')}）`;
+  if (unsupported.length) note += `\n（注: 次のファイルは形式非対応です。PDF・Word・画像・テキストファイルのみ対応です: ${unsupported.join('、')}）`;
   content.push({
     type: 'text',
-    text: `件名: ${m.subject || ''}\n差出人: ${m.sender || ''}\n本文:\n${(m.body || '').slice(0, 3000)}\n\n上記メッセージ${attachments.length ? '・添付資料' : ''}について、${cat.label}の観点から検討してください。${unsupported.length ? `\n（注: 次のファイルは形式非対応のため読み込めていません。PDF・画像・テキストファイルのみ対応です: ${unsupported.join('、')}）` : ''}`,
+    text: `件名: ${m.subject || ''}\n差出人: ${m.sender || ''}\n本文:\n${(m.body || '').slice(0, 3000)}\n\n上記メッセージ${attachments.length ? '・添付資料' : ''}について、${cat.label}の観点から検討してください。${note}`,
   });
   if (btn) { btn.disabled = true; btn.textContent = '検討中...'; }
   const model = getReviewModel();
