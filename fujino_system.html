@@ -814,7 +814,7 @@ function openApiKeyModal() {
         <label style="font-size:11px;">案件検討AIのモデル<span style="color:var(--text3);">（案件判定・タスク提案・返信ドラフトは自動でHaiku 4.5=最安モデルを使用）</span></label>
         <select id="anthropic-model-select" style="font-size:12px;">
           <option value="claude-sonnet-5" ${localStorage.getItem('fujino_anthropic_model')==='claude-sonnet-5'||!localStorage.getItem('fujino_anthropic_model')?'selected':''}>Sonnet 5（推奨・バランス型）</option>
-          <option value="claude-haiku-4-5" ${localStorage.getItem('fujino_anthropic_model')==='claude-haiku-4-5'?'selected':''}>Haiku 4.5（速い・安い）</option>
+          <option value="claude-haiku-4-5-20251001" ${localStorage.getItem('fujino_anthropic_model')==='claude-haiku-4-5-20251001'||localStorage.getItem('fujino_anthropic_model')==='claude-haiku-4-5'?'selected':''}>Haiku 4.5（速い・安い）</option>
           <option value="claude-opus-4-8" ${localStorage.getItem('fujino_anthropic_model')==='claude-opus-4-8'?'selected':''}>Opus 4.8（最高品質・高コスト）</option>
         </select>
       </div>
@@ -3048,9 +3048,11 @@ function submitInboxTask(id) {
 // Claude API 呼び出し（ブラウザから直接。ユーザー自身のAPIキーを使用）
 // 案件判定・タスク提案・返信ドラフトなどの軽いタスクは常に最安モデルを使う。
 // 案件の検討（AIレビュー）だけは設定で選んだモデル（既定: Sonnet 5）を使う。
-const FJ_CHEAP_MODEL = 'claude-haiku-4-5';
+const FJ_CHEAP_MODEL = 'claude-haiku-4-5-20251001';
 function getReviewModel() {
-  return localStorage.getItem('fujino_anthropic_model') || 'claude-sonnet-5';
+  const m = localStorage.getItem('fujino_anthropic_model');
+  if (m === 'claude-haiku-4-5') return FJ_CHEAP_MODEL; // 旧・不正なモデルIDの救済
+  return m || 'claude-sonnet-5';
 }
 async function callClaudeRaw(model, systemPrompt, content, maxTokens) {
   const key = localStorage.getItem('fujino_anthropic_key');
