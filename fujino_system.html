@@ -2750,16 +2750,21 @@ function mailBackendConfig() {
   const token = localStorage.getItem('fujino_mail_backend_token');
   return { url, token };
 }
+let mailImportCandidates = [];
 async function openMailImportModal() {
   const { url, token } = mailBackendConfig();
   if (!url || !token) {
     alert('先にサイドバーの「⚙ API設定確認」でメール連携サーバーのURLとAPIトークンを設定してください。');
     return;
   }
+  mailImportCandidates = [];
   openModal(`
     <div class="modal-title">メールを取り込む</div>
     <div id="mail-import-list" style="max-height:420px;overflow-y:auto;font-size:13px;">読み込み中...</div>
-    <div class="modal-footer"><button class="btn btn-outline" onclick="closeModal()">閉じる</button></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal()">閉じる</button>
+      <button id="mail-import-all-btn" class="btn btn-gold" style="display:none;" onclick="importAllMailMessages(this)">📥 すべて取り込む</button>
+    </div>
   `);
   try {
     const res = await fetch(`${url}/messages?limit=20`, { headers: { Authorization: `Bearer ${token}` } });
@@ -2769,49 +2774,63 @@ async function openMailImportModal() {
     const already = new Set(Object.values(state.inbox).map(m => m.sourceUid).filter(Boolean));
     const msgs = json.messages || [];
     if (!msgs.length) { listEl.innerHTML = `<p style="color:var(--text3);">メールがありません</p>`; return; }
+    mailImportCandidates = msgs.filter(m => !already.has(m.uid));
     listEl.innerHTML = msgs.map(m => `
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 4px;border-bottom:1px solid var(--border);">
         <div style="min-width:0;">
           <div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${m.hasAttachments ? '📎 ' : ''}${escHtml(m.subject)}</div>
           <div style="font-size:11px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escHtml(m.from)} / ${fmtDateTime(m.date)}</div>
         </div>
-        ${already.has(m.uid) ? `<span style="font-size:11px;color:var(--text3);flex-shrink:0;">取込済</span>` : `<button class="btn btn-gold btn-sm" style="flex-shrink:0;" onclick="importMailMessage(${m.uid}, this)">取り込む</button>`}
+        <span style="font-size:11px;color:var(--text3);flex-shrink:0;">${already.has(m.uid) ? '取込済' : '未取込'}</span>
       </div>`).join('');
+    const allBtn = document.getElementById('mail-import-all-btn');
+    if (allBtn && mailImportCandidates.length) {
+      allBtn.style.display = '';
+      allBtn.textContent = `📥 すべて取り込む（${mailImportCandidates.length}件）`;
+    }
   } catch (e) {
     const listEl = document.getElementById('mail-import-list');
     if (listEl) listEl.innerHTML = `<p style="color:var(--red);">接続失敗: ${escHtml(e.message)}</p>`;
   }
 }
-async function importMailMessage(uid, btn) {
+async function importAllMailMessages(btn) {
   const { url, token } = mailBackendConfig();
-  if (btn) { btn.disabled = true; btn.textContent = '取込中...'; }
-  try {
-    const res = await fetch(`${url}/messages/${uid}`, { headers: { Authorization: `Bearer ${token}` } });
-    const detail = await res.json();
-    if (!res.ok) { alert('取り込みエラー: ' + (detail.error || res.status)); if (btn) { btn.disabled = false; btn.textContent = '取り込む'; } return; }
-    const attachments = [];
-    for (const a of (detail.attachments || [])) {
-      const ar = await fetch(`${url}/messages/${uid}/attachments/${a.index}`, { headers: { Authorization: `Bearer ${token}` } });
-      const ad = await ar.json();
-      if (ar.ok) attachments.push({ name: ad.filename, mimeType: ad.contentType, size: a.size, dataBase64: ad.dataBase64 });
+  const candidates = mailImportCandidates;
+  if (!candidates.length) return;
+  if (btn) btn.disabled = true;
+  let imported = 0, failed = 0;
+  for (const m of candidates) {
+    if (btn) btn.textContent = `取込中... (${imported + failed + 1}/${candidates.length})`;
+    try {
+      const res = await fetch(`${url}/messages/${m.uid}`, { headers: { Authorization: `Bearer ${token}` } });
+      const detail = await res.json();
+      if (!res.ok) { failed++; continue; }
+      const attachments = [];
+      for (const a of (detail.attachments || [])) {
+        const ar = await fetch(`${url}/messages/${m.uid}/attachments/${a.index}`, { headers: { Authorization: `Bearer ${token}` } });
+        const ad = await ar.json();
+        if (ar.ok) attachments.push({ name: ad.filename, mimeType: ad.contentType, size: a.size, dataBase64: ad.dataBase64 });
+      }
+      const id = genId();
+      state.inbox[id] = {
+        id, source: 'email', sourceUid: m.uid,
+        sender: detail.from || '', subject: detail.subject || '(件名なし)', body: detail.text || '',
+        receivedAt: detail.date || new Date().toISOString(),
+        status: 'open', projectId: null,
+        aiCandidateProjectId: null, aiConfidence: null,
+        replyInstruction: '', replyDraft: '',
+        attachments, review: null,
+      };
+      imported++;
+    } catch (e) {
+      failed++;
     }
-    const id = genId();
-    state.inbox[id] = {
-      id, source: 'email', sourceUid: uid,
-      sender: detail.from || '', subject: detail.subject || '(件名なし)', body: detail.text || '',
-      receivedAt: detail.date || new Date().toISOString(),
-      status: 'open', projectId: null,
-      aiCandidateProjectId: null, aiConfidence: null,
-      replyInstruction: '', replyDraft: '',
-      attachments, review: null,
-    };
-    scheduleSave();
-    closeModal();
-    navigate('inbox');
-  } catch (e) {
-    alert('取り込みに失敗しました: ' + e.message);
-    if (btn) { btn.disabled = false; btn.textContent = '取り込む'; }
   }
+  mailImportCandidates = [];
+  scheduleSave();
+  closeModal();
+  navigate('inbox');
+  if (failed) alert(`${imported}件を取り込みました（${failed}件は失敗しました）`);
 }
 
 function openAddInboxModal() {
@@ -2919,6 +2938,7 @@ function renderInboxDetail(id) {
         <div class="inbox-panel">
           <div class="inbox-panel-title">案件の検討（AI）</div>
           <div style="font-size:11px;color:var(--text3);margin-bottom:6px;">添付ファイル<span style="color:var(--orange);">（安全のため「読み込む」を押すまでファイルの中身は解析されません）</span></div>
+          ${(m.attachments || []).length ? `<button class="btn btn-outline btn-sm" style="margin-bottom:8px;" onclick="loadAllInboxAttachments('${m.id}', this)">📎 添付ファイルを読み込む</button>` : ''}
           <div>
             ${(m.attachments || []).map((a, i) => `<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:4px 0;gap:8px;">
               <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">📎 ${escHtml(a.name)} <span style="color:var(--text3);">(${fmtFileSize(a.size)})</span></span>
@@ -2936,8 +2956,17 @@ function renderInboxDetail(id) {
             <label>検討の種類</label>
             <select id="review-category-${m.id}">
               <option value="legal_consult" ${m.review?.category==='legal_consult'?'selected':''}>法律相談</option>
-              <option value="contract_review" ${m.review?.category==='contract_review'?'selected':''}>契約書レビュー</option>
-              <option value="drafting" ${m.review?.category==='drafting'?'selected':''}>起案</option>
+              <optgroup label="契約書">
+                <option value="contract_review" ${m.review?.category==='contract_review'?'selected':''}>契約書レビュー</option>
+                <option value="contract_drafting" ${m.review?.category==='contract_drafting'?'selected':''}>契約書作成</option>
+              </optgroup>
+              <optgroup label="起案">
+                <option value="drafting_complaint" ${m.review?.category==='drafting_complaint'?'selected':''}>訴状</option>
+                <option value="drafting_brief" ${m.review?.category==='drafting_brief'?'selected':''}>準備書面</option>
+                <option value="drafting_statement" ${m.review?.category==='drafting_statement'?'selected':''}>主張書面</option>
+                <option value="drafting_other" ${m.review?.category==='drafting_other'?'selected':''}>その他の起案</option>
+              </optgroup>
+              <option value="hearing_report" ${m.review?.category==='hearing_report'?'selected':''}>期日報告書</option>
             </select>
           </div>
           <button class="btn btn-gold btn-sm" onclick="startCaseReview('${m.id}', this)">▶ 検討を開始</button>
@@ -3001,7 +3030,7 @@ function submitInboxTask(id) {
   const name = (document.getElementById(`inbox-task-name-${id}`)?.value || '').trim();
   if (!name) { alert('タスク名を入力してください'); return; }
   const t = {
-    id: genId(), projectId: m.projectId || null,
+    id: genId(), projectId: m.projectId || null, inboxId: id,
     name,
     requestedAt: todayStr(),
     dueDate: document.getElementById(`inbox-task-due-${id}`)?.value || '',
@@ -3126,6 +3155,31 @@ const CASE_REVIEW_CATEGORIES = {
     label: '契約書レビュー',
     sys: 'あなたは日本の法律事務所の契約書レビュー補助AIです。添付された契約書・資料を精査し、法的リスク、依頼者に不利な条項、抜け漏れ、修正すべき点を箇条書きで整理してください。断定的な法的判断は避け、不確かな点は「確認が必要」と明示してください。',
   },
+  contract_drafting: {
+    label: '契約書作成',
+    sys: 'あなたは日本の法律事務所の契約書作成補助AIです。与えられた資料・メッセージ内容（当事者、取引内容、希望条件等）をもとに、必要となる契約書の条項案を作成してください。未来創造弁護士法人のナンバリング規則（第1、第2、…／(1)、(2)、…／ア、イ、…／(ｱ)、(ｲ)、…）を意識した構成にしてください。正確な法律用語を使用し、不確かな法的判断は断定せず「確認が必要」「専門家への相談を推奨」と明示してください。',
+  },
+  drafting_complaint: {
+    label: '起案：訴状',
+    sys: 'あなたは日本の法律事務所の起案補助AIです。与えられた資料・メッセージ内容をもとに、訴状の起案（請求の趣旨・請求の原因の骨子）を作成してください。正確な法律用語を使用し、不確かな法的判断は断定せず「確認が必要」「専門家への相談を推奨」と明示してください。',
+  },
+  drafting_brief: {
+    label: '起案：準備書面',
+    sys: 'あなたは日本の法律事務所の起案補助AIです。与えられた資料・メッセージ内容をもとに、準備書面の起案（争点整理・主張の骨子）を作成してください。正確な法律用語を使用し、不確かな法的判断は断定せず「確認が必要」「専門家への相談を推奨」と明示してください。',
+  },
+  drafting_statement: {
+    label: '起案：主張書面',
+    sys: 'あなたは日本の法律事務所の起案補助AIです。与えられた資料・メッセージ内容をもとに、主張書面の起案（主張したい事実・法的根拠の骨子）を作成してください。正確な法律用語を使用し、不確かな法的判断は断定せず「確認が必要」「専門家への相談を推奨」と明示してください。',
+  },
+  drafting_other: {
+    label: '起案：その他',
+    sys: 'あなたは日本の法律事務所の起案補助AIです。与えられた資料・メッセージ内容をもとに、必要となる法律文書の起案（ドラフト）の骨子・条項案を作成してください。正確な法律用語を使用し、不確かな法的判断は断定せず「確認が必要」「専門家への相談を推奨」と明示してください。',
+  },
+  hearing_report: {
+    label: '期日報告書',
+    sys: 'あなたは日本の法律事務所の期日報告書作成補助AIです。与えられた資料・メッセージ内容（期日の経過、裁判所・相手方の発言、次回期日等）をもとに、依頼者向けの裁判期日結果報告書の骨子を作成してください。事実経過と今後の対応方針を分けて整理し、不確かな点は「確認が必要」と明示してください。',
+  },
+  // 旧データ互換用（過去に category:'drafting' で保存されたAI検討結果のラベル表示のため残置）
   drafting: {
     label: '起案',
     sys: 'あなたは日本の法律事務所の起案補助AIです。与えられた資料・メッセージ内容をもとに、必要となる法律文書の起案（ドラフト）の骨子・条項案を作成してください。正確な法律用語を使用し、不確かな法的判断は断定せず「確認が必要」「専門家への相談を推奨」と明示してください。',
@@ -3167,29 +3221,49 @@ function isDocxAttachment(a) {
     || /\.docx$/i.test(a.name || '');
 }
 // 「読み込む」を押した時だけファイルの中身を解析する（安全のため自動解析はしない）
-async function loadInboxAttachment(id, idx, btn) {
+async function loadInboxAttachmentCore(id, idx) {
   const m = state.inbox[id];
   if (!m || !m.attachments || !m.attachments[idx]) return;
   const a = m.attachments[idx];
+  if (isDocxAttachment(a)) {
+    if (typeof mammoth === 'undefined') {
+      throw new Error('docx変換ライブラリの読み込みに失敗しました（通信環境をご確認ください）');
+    }
+    const bytes = Uint8Array.from(atob(a.dataBase64), c => c.charCodeAt(0));
+    const result = await mammoth.extractRawText({ arrayBuffer: bytes.buffer });
+    a.extractedText = result.value;
+  }
+  a.loaded = true;
+}
+async function loadInboxAttachment(id, idx, btn) {
   if (btn) { btn.disabled = true; btn.textContent = '読込中...'; }
   try {
-    if (isDocxAttachment(a)) {
-      if (typeof mammoth === 'undefined') {
-        alert('docx変換ライブラリの読み込みに失敗しました（通信環境をご確認ください）');
-        if (btn) { btn.disabled = false; btn.textContent = '読み込む'; }
-        return;
-      }
-      const bytes = Uint8Array.from(atob(a.dataBase64), c => c.charCodeAt(0));
-      const result = await mammoth.extractRawText({ arrayBuffer: bytes.buffer });
-      a.extractedText = result.value;
-    }
-    a.loaded = true;
+    await loadInboxAttachmentCore(id, idx);
     scheduleSave();
     renderPage();
   } catch (e) {
     alert('ファイルの読み込みに失敗しました: ' + e.message);
     if (btn) { btn.disabled = false; btn.textContent = '読み込む'; }
   }
+}
+async function loadAllInboxAttachments(id, btn) {
+  const m = state.inbox[id];
+  if (!m || !m.attachments || !m.attachments.length) return;
+  const targets = m.attachments.map((a, i) => i).filter(i => !m.attachments[i].loaded);
+  if (!targets.length) { alert('未読み込みの添付ファイルはありません'); return; }
+  if (btn) btn.disabled = true;
+  const failed = [];
+  for (let n = 0; n < targets.length; n++) {
+    if (btn) btn.textContent = `読込中... (${n + 1}/${targets.length})`;
+    try {
+      await loadInboxAttachmentCore(id, targets[n]);
+    } catch (e) {
+      failed.push(m.attachments[targets[n]].name);
+    }
+  }
+  scheduleSave();
+  renderPage();
+  if (failed.length) alert(`次のファイルの読み込みに失敗しました: ${failed.join('、')}`);
 }
 async function startCaseReview(id, btn) {
   const m = state.inbox[id];
@@ -3865,10 +3939,14 @@ function openRightSidebar(taskId) {
   const t = state.tasks[taskId];
   if (!t) return;
   const p = state.projects[t.projectId];
+  const im = t.inboxId ? state.inbox[t.inboxId] : null;
   document.getElementById('rsb-title').textContent = t.name;
   document.getElementById('rsb-body').innerHTML = `
     ${p ? `<button class="rsb-jump-btn" onclick="navigate('project','${t.projectId}');closeRightSidebar()">
       🔗 ${escHtml(p.name||'(無題)')} を開く
+    </button>` : ''}
+    ${im ? `<button class="rsb-jump-btn" onclick="openInboxDetail('${t.inboxId}');closeRightSidebar()">
+      📥 元のメール（${escHtml(im.subject||'(件名なし)')}）を開く
     </button>` : ''}
     <div class="rsb-field"><label>タスク名</label>
       <input id="rsb-name" value="${escHtml(t.name||'')}">
