@@ -892,6 +892,17 @@ function openApiKeyModal() {
       <button class="btn btn-sm btn-outline" onclick="googleSignIn()">Googleでログイン</button>
       <div id="gcal-login-status" style="font-size:12px;margin-top:6px;color:var(--text3);">${googleAccessToken ? '✅ ログイン済み' : '未ログイン'}</div>
     </div>
+    <div class="form-field" style="border-top:1px solid var(--border);margin-top:8px;padding-top:12px;">
+      <label>💻 Zoom（固定パーソナルミーティングURL）</label>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:6px;">オンライン打ち合わせの予定作成時に、毎回このURLを使用します。Zoomの「プロフィール」画面の「パーソナルミーティングID」欄にあるURLをコピーして貼り付けてください。</div>
+      <input id="zoom-personal-url" type="text" value="${escHtml(localStorage.getItem('fujino_zoom_personal_url')||'')}" placeholder="https://us06web.zoom.us/j/xxxxxxxxxxx?pwd=..." style="font-family:monospace;font-size:12px;">
+      <button class="btn btn-sm btn-gold" style="margin-top:6px;" onclick="(()=>{
+        const v=document.getElementById('zoom-personal-url').value.trim();
+        if(!v){alert('URLを入力してください');return;}
+        localStorage.setItem('fujino_zoom_personal_url',v);
+        alert('Zoom URLを保存しました');
+      })()">保存</button>
+    </div>
     <div class="modal-footer" style="flex-wrap:wrap;gap:8px;">
       <button class="btn btn-gold btn-sm" onclick="(async()=>{
         if(!gistToken||gistToken==='none'){alert('GitHubトークンが設定されていません');return;}
@@ -3501,8 +3512,8 @@ async function createMeetingFromInbox(id, btn) {
     const token = await ensureGoogleAuth();
     let location = '', description = '', roomEmail = null, zoomUrl = null;
     if (fmt === 'online') {
-      const zoom = await createZoomMeeting(`${cust} お打ち合わせ`, `${date}T${time}:00`, duration);
-      zoomUrl = zoom.joinUrl;
+      zoomUrl = localStorage.getItem('fujino_zoom_personal_url');
+      if (!zoomUrl) { throw new Error('先にサイドバーの「⚙ API設定確認」でZoomのパーソナルミーティングURLを設定してください。'); }
       location = 'オンライン(Zoom)';
       description = `Zoom参加URL: ${zoomUrl}`;
     } else {
