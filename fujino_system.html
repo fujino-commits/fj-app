@@ -2622,8 +2622,11 @@ function getInboxForTab(tab) {
 }
 function renderInboxList() {
   const msgs = getInboxForTab(currentInboxTab);
+  const isEmptyInbox = !Object.keys(state.inbox || {}).length;
   const listHtml = !msgs.length
-    ? `<div class="empty-state"><div class="empty-icon">📭</div><p>このタブにメッセージはありません</p></div>`
+    ? `<div class="empty-state"><div class="empty-icon">📭</div><p>このタブにメッセージはありません</p>
+        ${isEmptyInbox ? `<button class="btn btn-gold btn-sm" style="margin-top:10px;" onclick="seedSampleInboxData()">サンプルメールを3件追加してAI機能を試す</button>` : ''}
+      </div>`
     : msgs.map(m => inboxRowHtml(m)).join('');
   return `
   <div class="page-header"><h1 class="page-title">受信<span>箱</span></h1>
@@ -2658,6 +2661,43 @@ function inboxRowHtml(m) {
 }
 function switchInboxTab(tab) {
   currentInboxTab = tab;
+  renderPage();
+}
+function seedSampleInboxData() {
+  const samples = [
+    {
+      source: 'email',
+      sender: '吉田大気（プロスペックAZ株式会社）',
+      subject: '(法務審査依頼)株式会社東京アドバイザリーグループ M&A等アドバイスに係る契約書',
+      body: '未来創造弁護士法人 藤野様\n\nお世話になっております。\n表題の件、法務審査いただけますでしょうか。\nよろしくお願いいたします。\n\nプロスペックAZ株式会社 第二社長 吉田 大気\nTel: 052-526-3370（代表）　携帯: 080-4914-4491',
+      minutesAgo: 40,
+    },
+    {
+      source: 'email',
+      sender: '古川斉司',
+      subject: '弊社のお願いの条件の件 譲渡契約変更について',
+      body: '代表\n本日、東京発電の申し入れの持ち分買い取りに関する協議を行いました。\n当社の提案の下記事項への先方回答及び当社の回答案は次の通りと考えますが、よろしいでしょうか？\n\n1．持分の90百万円の払込み時期\n・当社提案：9月末 30百万円\n・先方回答：11月末 30\n・12月末 30',
+      minutesAgo: 24 * 60,
+    },
+    {
+      source: 'slack',
+      sender: '廣瀬ゆかり',
+      subject: 'ミライーガル相談（東京オフィス来所）予約確認',
+      body: '廣瀬ゆかり様より、ミライーガルご相談（東京オフィス来所）の予約を受け付けました。\n日程: 07/28(火) 10:00〜10:45(日本時間UTC+9)',
+      minutesAgo: 60,
+    },
+  ];
+  samples.forEach(s => {
+    const id = genId();
+    state.inbox[id] = {
+      id, source: s.source, sender: s.sender, subject: s.subject, body: s.body,
+      receivedAt: new Date(Date.now() - s.minutesAgo * 60000).toISOString(),
+      status: 'open', projectId: null,
+      aiCandidateProjectId: null, aiConfidence: null,
+      replyInstruction: '', replyDraft: '',
+    };
+  });
+  scheduleSave();
   renderPage();
 }
 function openAddInboxModal() {
