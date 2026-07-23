@@ -810,10 +810,11 @@ function openApiKeyModal() {
         ">表示</button>
       </div>
       <div style="margin-top:6px;">
-        <label style="font-size:11px;">使用モデル</label>
+        <label style="font-size:11px;">案件検討AIのモデル<span style="color:var(--text3);">（案件判定・タスク提案・返信ドラフトは自動でHaiku 4.5=最安モデルを使用）</span></label>
         <select id="anthropic-model-select" style="font-size:12px;">
-          <option value="claude-haiku-4-5" ${localStorage.getItem('fujino_anthropic_model')==='claude-haiku-4-5'||!localStorage.getItem('fujino_anthropic_model')?'selected':''}>Haiku 4.5（速い・安い）</option>
-          <option value="claude-sonnet-5" ${localStorage.getItem('fujino_anthropic_model')==='claude-sonnet-5'?'selected':''}>Sonnet 5（高品質）</option>
+          <option value="claude-sonnet-5" ${localStorage.getItem('fujino_anthropic_model')==='claude-sonnet-5'||!localStorage.getItem('fujino_anthropic_model')?'selected':''}>Sonnet 5（推奨・バランス型）</option>
+          <option value="claude-haiku-4-5" ${localStorage.getItem('fujino_anthropic_model')==='claude-haiku-4-5'?'selected':''}>Haiku 4.5（速い・安い）</option>
+          <option value="claude-opus-4-8" ${localStorage.getItem('fujino_anthropic_model')==='claude-opus-4-8'?'selected':''}>Opus 4.8（最高品質・高コスト）</option>
         </select>
       </div>
       <button class="btn btn-sm btn-gold" style="margin-top:6px;" onclick="(()=>{
@@ -2730,6 +2731,7 @@ function submitAddInbox() {
     projectId: null,
     aiCandidateProjectId: null, aiConfidence: null,
     replyInstruction: '', replyDraft: '',
+    attachments: [], review: null,
   };
   state.inbox[m.id] = m;
   scheduleSave();
@@ -2800,6 +2802,33 @@ function renderInboxDetail(id) {
             <button class="btn btn-gold btn-sm" onclick="submitInboxTask('${m.id}')">タスクを追加</button>
             <button class="btn btn-outline btn-sm" onclick="aiSuggestTask('${m.id}', this)">🤖 AIでタスクを提案</button>
           </div>
+        </div>
+        <div class="inbox-panel">
+          <div class="inbox-panel-title">案件の検討（AI）</div>
+          <div style="font-size:11px;color:var(--text3);margin-bottom:6px;">添付ファイル</div>
+          <div>
+            ${(m.attachments || []).map((a, i) => `<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:4px 0;">
+              <span>📎 ${escHtml(a.name)} <span style="color:var(--text3);">(${fmtFileSize(a.size)})</span></span>
+              <button class="btn btn-outline btn-sm" style="padding:2px 8px;" onclick="removeInboxAttachment('${m.id}',${i})">削除</button>
+            </div>`).join('') || `<div style="font-size:12px;color:var(--text3);">添付ファイルはありません（PDF・画像・テキストに対応）</div>`}
+          </div>
+          <div style="margin-top:6px;">
+            <input type="file" id="review-file-input-${m.id}" multiple style="display:none;" onchange="addInboxAttachment('${m.id}', this)">
+            <button class="btn btn-outline btn-sm" onclick="document.getElementById('review-file-input-${m.id}').click()">＋ファイルを追加</button>
+          </div>
+          <div class="form-field" style="margin-top:12px;">
+            <label>検討の種類</label>
+            <select id="review-category-${m.id}">
+              <option value="legal_consult" ${m.review?.category==='legal_consult'?'selected':''}>法律相談</option>
+              <option value="contract_review" ${m.review?.category==='contract_review'?'selected':''}>契約書レビュー</option>
+              <option value="drafting" ${m.review?.category==='drafting'?'selected':''}>起案</option>
+            </select>
+          </div>
+          <button class="btn btn-gold btn-sm" onclick="startCaseReview('${m.id}', this)">▶ 検討を開始</button>
+          ${m.review ? `<div style="margin-top:12px;">
+            <div style="font-size:11px;color:var(--text3);">${escHtml(CASE_REVIEW_CATEGORIES[m.review.category]?.label || '')} の検討結果（${fmtDateTime(m.review.generatedAt)} / ${escHtml(m.review.model||'')}）</div>
+            <div class="inbox-body-text" style="margin-top:6px;">${escHtml(m.review.output)}</div>
+          </div>` : ''}
         </div>
       </div>
     </div>
@@ -2872,10 +2901,15 @@ function submitInboxTask(id) {
 }
 
 // Claude API 呼び出し（ブラウザから直接。ユーザー自身のAPIキーを使用）
-async function callClaude(systemPrompt, userPrompt) {
+// 案件判定・タスク提案・返信ドラフトなどの軽いタスクは常に最安モデルを使う。
+// 案件の検討（AIレビュー）だけは設定で選んだモデル（既定: Sonnet 5）を使う。
+const FJ_CHEAP_MODEL = 'claude-haiku-4-5';
+function getReviewModel() {
+  return localStorage.getItem('fujino_anthropic_model') || 'claude-sonnet-5';
+}
+async function callClaudeRaw(model, systemPrompt, content, maxTokens) {
   const key = localStorage.getItem('fujino_anthropic_key');
   if (!key) { alert('Anthropic APIキーが未設定です。サイドバーの「⚙ API設定確認」から設定してください。'); return null; }
-  const model = localStorage.getItem('fujino_anthropic_model') || 'claude-haiku-4-5';
   try {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -2887,9 +2921,9 @@ async function callClaude(systemPrompt, userPrompt) {
       },
       body: JSON.stringify({
         model,
-        max_tokens: 1024,
+        max_tokens: maxTokens || 1024,
         system: systemPrompt,
-        messages: [{ role: 'user', content: userPrompt }],
+        messages: [{ role: 'user', content }],
       }),
     });
     const json = await res.json();
@@ -2900,6 +2934,9 @@ async function callClaude(systemPrompt, userPrompt) {
     alert('AI呼び出しに失敗しました: ' + e.message);
     return null;
   }
+}
+async function callClaude(systemPrompt, userPrompt) {
+  return callClaudeRaw(FJ_CHEAP_MODEL, systemPrompt, userPrompt, 1024);
 }
 async function aiClassifyProject(id, btn) {
   const m = state.inbox[id];
@@ -2958,6 +2995,91 @@ async function aiRunAll(id, btn) {
   await aiClassifyProject(id, null);
   await aiGenerateReply(id, null);
   if (btn) { btn.disabled = false; btn.textContent = '🤖 AI'; }
+}
+
+// ============================================================
+// 案件の検討（AIレビュー） — 添付ファイルを読み込ませ、起案/契約書レビュー/法律相談のいずれかを
+// ユーザーが選択し、「検討を開始」ボタンを押した時だけ実行する。
+// ============================================================
+const CASE_REVIEW_CATEGORIES = {
+  legal_consult: {
+    label: '法律相談',
+    sys: 'あなたは日本の法律事務所（未来創造弁護士法人）の法律相談補助AIです。与えられた資料・メッセージ内容について、法的な論点を整理し、考えられる対応方針を提示してください。断定的な法的判断は避け、不確かな点は「確認が必要」「専門家への相談を推奨」と明示してください。箇条書きで読みやすく整理してください。',
+  },
+  contract_review: {
+    label: '契約書レビュー',
+    sys: 'あなたは日本の法律事務所の契約書レビュー補助AIです。添付された契約書・資料を精査し、法的リスク、依頼者に不利な条項、抜け漏れ、修正すべき点を箇条書きで整理してください。断定的な法的判断は避け、不確かな点は「確認が必要」と明示してください。',
+  },
+  drafting: {
+    label: '起案',
+    sys: 'あなたは日本の法律事務所の起案補助AIです。与えられた資料・メッセージ内容をもとに、必要となる法律文書の起案（ドラフト）の骨子・条項案を作成してください。正確な法律用語を使用し、不確かな法的判断は断定せず「確認が必要」「専門家への相談を推奨」と明示してください。',
+  },
+};
+function fmtFileSize(n) {
+  if (!n && n !== 0) return '';
+  if (n < 1024) return n + 'B';
+  if (n < 1024 * 1024) return (n / 1024).toFixed(1) + 'KB';
+  return (n / 1024 / 1024).toFixed(2) + 'MB';
+}
+async function addInboxAttachment(id, input) {
+  const m = state.inbox[id];
+  if (!m) return;
+  if (!m.attachments) m.attachments = [];
+  const files = [...(input.files || [])];
+  for (const f of files) {
+    const dataUrl = await new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result);
+      r.onerror = reject;
+      r.readAsDataURL(f);
+    });
+    const base64 = dataUrl.split(',')[1] || '';
+    m.attachments.push({ name: f.name, mimeType: f.type || 'application/octet-stream', size: f.size, dataBase64: base64 });
+  }
+  scheduleSave();
+  renderPage();
+}
+function removeInboxAttachment(id, idx) {
+  const m = state.inbox[id];
+  if (!m || !m.attachments) return;
+  m.attachments.splice(idx, 1);
+  scheduleSave();
+  renderPage();
+}
+async function startCaseReview(id, btn) {
+  const m = state.inbox[id];
+  if (!m) return;
+  const categoryKey = document.getElementById(`review-category-${id}`)?.value || 'legal_consult';
+  const cat = CASE_REVIEW_CATEGORIES[categoryKey];
+  const attachments = m.attachments || [];
+  const content = [];
+  const unsupported = [];
+  attachments.forEach(a => {
+    if (a.mimeType === 'application/pdf') {
+      content.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: a.dataBase64 } });
+    } else if (/^image\/(png|jpeg|jpg|gif|webp)$/.test(a.mimeType)) {
+      content.push({ type: 'image', source: { type: 'base64', media_type: a.mimeType, data: a.dataBase64 } });
+    } else if (a.mimeType.startsWith('text/')) {
+      try {
+        const text = decodeURIComponent(escape(atob(a.dataBase64)));
+        content.push({ type: 'text', text: `【添付ファイル: ${a.name}】\n${text.slice(0, 8000)}` });
+      } catch (e) { unsupported.push(a.name); }
+    } else {
+      unsupported.push(a.name);
+    }
+  });
+  content.push({
+    type: 'text',
+    text: `件名: ${m.subject || ''}\n差出人: ${m.sender || ''}\n本文:\n${(m.body || '').slice(0, 3000)}\n\n上記メッセージ${attachments.length ? '・添付資料' : ''}について、${cat.label}の観点から検討してください。${unsupported.length ? `\n（注: 次のファイルは形式非対応のため読み込めていません。PDF・画像・テキストファイルのみ対応です: ${unsupported.join('、')}）` : ''}`,
+  });
+  if (btn) { btn.disabled = true; btn.textContent = '検討中...'; }
+  const model = getReviewModel();
+  const result = await callClaudeRaw(model, cat.sys, content, 4096);
+  if (btn) { btn.disabled = false; btn.textContent = '▶ 検討を開始'; }
+  if (!result) return;
+  m.review = { category: categoryKey, output: result, generatedAt: new Date().toISOString(), model };
+  scheduleSave();
+  renderPage();
 }
 
 // ============================================================
