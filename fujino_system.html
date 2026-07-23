@@ -2850,7 +2850,7 @@ async function openMailImportModal() {
       const isImported = already.has(m.uid);
       return `
       <div style="display:flex;align-items:center;gap:8px;padding:8px 4px;border-bottom:1px solid var(--border);">
-        <input type="checkbox" class="mail-import-cb" data-idx="${i}" ${isImported ? 'disabled' : 'checked'} onchange="updateMailImportCount()">
+        <input type="checkbox" class="mail-import-cb" data-idx="${i}" ${isImported ? 'disabled' : 'checked'} onchange="updateMailImportCount()" style="width:auto;flex:0 0 auto;padding:0;margin:0;">
         <div style="min-width:0;flex:1;">
           <div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${m.hasAttachments ? '📎 ' : ''}${escHtml(m.subject)}</div>
           <div style="font-size:11px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escHtml(m.from)} / ${fmtDateTime(m.date)}</div>
@@ -2958,7 +2958,7 @@ async function openSlackImportModal() {
       const snippet = (m.text || '').replace(/\s+/g, ' ').slice(0, 60);
       return `
       <div style="display:flex;align-items:center;gap:8px;padding:8px 4px;border-bottom:1px solid var(--border);">
-        <input type="checkbox" class="slack-import-cb" data-idx="${i}" ${isImported ? 'disabled' : 'checked'} onchange="updateSlackImportCount()">
+        <input type="checkbox" class="slack-import-cb" data-idx="${i}" ${isImported ? 'disabled' : 'checked'} onchange="updateSlackImportCount()" style="width:auto;flex:0 0 auto;padding:0;margin:0;">
         <div style="min-width:0;flex:1;">
           <div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">[${kindLabel}] ${escHtml(m.channelLabel)} - ${escHtml(m.fromName)}</div>
           <div style="font-size:11px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escHtml(snippet)}</div>
