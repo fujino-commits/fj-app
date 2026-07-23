@@ -2849,16 +2849,30 @@ async function openMailImportModal() {
     listEl.innerHTML = msgs.map((m, i) => {
       const isImported = already.has(m.uid);
       return `
-      <div style="display:flex;align-items:center;gap:8px;padding:8px 4px;border-bottom:1px solid var(--border);">
-        <input type="checkbox" class="mail-import-cb" data-idx="${i}" ${isImported ? 'disabled' : 'checked'} onchange="updateMailImportCount()" style="width:auto;flex:0 0 auto;padding:0;margin:0;">
+      <div style="display:flex;align-items:flex-start;gap:8px;padding:8px 4px;border-bottom:1px solid var(--border);">
+        <input type="checkbox" class="mail-import-cb" data-idx="${i}" ${isImported ? 'disabled' : 'checked'} onchange="updateMailImportCount()" style="width:auto;flex:0 0 auto;padding:0;margin:4px 0 0;">
         <div style="min-width:0;flex:1;">
           <div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${m.hasAttachments ? '📎 ' : ''}${escHtml(m.subject)}</div>
           <div style="font-size:11px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escHtml(m.from)} / ${fmtDateTime(m.date)}</div>
+          <div id="mail-import-snippet-${i}" style="font-size:12px;color:var(--text2);margin-top:4px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">読み込み中...</div>
         </div>
         <span style="font-size:11px;color:var(--text3);flex-shrink:0;">${isImported ? '取込済' : ''}</span>
       </div>`;
     }).join('');
     updateMailImportCount();
+    msgs.forEach((m, i) => {
+      fetch(`${url}/messages/${m.uid}`, { headers: { Authorization: `Bearer ${token}` } })
+        .then(r => r.json())
+        .then(detail => {
+          m._detail = detail;
+          const el = document.getElementById(`mail-import-snippet-${i}`);
+          if (el) el.textContent = (detail.text || '').replace(/\s+/g, ' ').trim().slice(0, 200) || '(本文なし)';
+        })
+        .catch(() => {
+          const el = document.getElementById(`mail-import-snippet-${i}`);
+          if (el) el.textContent = '(本文の取得に失敗しました)';
+        });
+    });
   } catch (e) {
     const listEl = document.getElementById('mail-import-list');
     if (listEl) listEl.innerHTML = `<p style="color:var(--red);">接続失敗: ${escHtml(e.message)}</p>`;
@@ -2882,9 +2896,12 @@ async function importAllMailMessages(btn) {
   for (const m of candidates) {
     if (btn) btn.textContent = `取込中... (${imported + failed + 1}/${candidates.length})`;
     try {
-      const res = await fetch(`${url}/messages/${m.uid}`, { headers: { Authorization: `Bearer ${token}` } });
-      const detail = await res.json();
-      if (!res.ok) { failed++; continue; }
+      let detail = m._detail;
+      if (!detail) {
+        const res = await fetch(`${url}/messages/${m.uid}`, { headers: { Authorization: `Bearer ${token}` } });
+        detail = await res.json();
+        if (!res.ok) { failed++; continue; }
+      }
       const attachments = [];
       for (const a of (detail.attachments || [])) {
         const ar = await fetch(`${url}/messages/${m.uid}/attachments/${a.index}`, { headers: { Authorization: `Bearer ${token}` } });
@@ -2955,13 +2972,13 @@ async function openSlackImportModal() {
       const uid = `${m.channel}_${m.ts}`;
       const isImported = already.has(uid);
       const kindLabel = m.kind === 'mention' ? 'メンション' : 'DM';
-      const snippet = (m.text || '').replace(/\s+/g, ' ').slice(0, 60);
+      const snippet = (m.text || '').replace(/\s+/g, ' ').trim().slice(0, 200) || '(本文なし)';
       return `
-      <div style="display:flex;align-items:center;gap:8px;padding:8px 4px;border-bottom:1px solid var(--border);">
-        <input type="checkbox" class="slack-import-cb" data-idx="${i}" ${isImported ? 'disabled' : 'checked'} onchange="updateSlackImportCount()" style="width:auto;flex:0 0 auto;padding:0;margin:0;">
+      <div style="display:flex;align-items:flex-start;gap:8px;padding:8px 4px;border-bottom:1px solid var(--border);">
+        <input type="checkbox" class="slack-import-cb" data-idx="${i}" ${isImported ? 'disabled' : 'checked'} onchange="updateSlackImportCount()" style="width:auto;flex:0 0 auto;padding:0;margin:4px 0 0;">
         <div style="min-width:0;flex:1;">
           <div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">[${kindLabel}] ${escHtml(m.channelLabel)} - ${escHtml(m.fromName)}</div>
-          <div style="font-size:11px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escHtml(snippet)}</div>
+          <div style="font-size:12px;color:var(--text2);margin-top:4px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">${escHtml(snippet)}</div>
         </div>
         <span style="font-size:11px;color:var(--text3);flex-shrink:0;">${isImported ? '取込済' : ''}</span>
       </div>`;
