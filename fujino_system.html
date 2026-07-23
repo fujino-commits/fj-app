@@ -892,17 +892,6 @@ function openApiKeyModal() {
       <button class="btn btn-sm btn-outline" onclick="googleSignIn()">Googleでログイン</button>
       <div id="gcal-login-status" style="font-size:12px;margin-top:6px;color:var(--text3);">${googleAccessToken ? '✅ ログイン済み' : '未ログイン'}</div>
     </div>
-    <div class="form-field" style="border-top:1px solid var(--border);margin-top:8px;padding-top:12px;">
-      <label>💻 Zoom（固定パーソナルミーティングURL）</label>
-      <div style="font-size:11px;color:var(--text3);margin-bottom:6px;">オンライン打ち合わせの予定作成時に、毎回このURLを使用します。Zoomの「プロフィール」画面の「パーソナルミーティングID」欄にあるURLをコピーして貼り付けてください。</div>
-      <input id="zoom-personal-url" type="text" value="${escHtml(localStorage.getItem('fujino_zoom_personal_url')||'')}" placeholder="https://us06web.zoom.us/j/xxxxxxxxxxx?pwd=..." style="font-family:monospace;font-size:12px;">
-      <button class="btn btn-sm btn-gold" style="margin-top:6px;" onclick="(()=>{
-        const v=document.getElementById('zoom-personal-url').value.trim();
-        if(!v){alert('URLを入力してください');return;}
-        localStorage.setItem('fujino_zoom_personal_url',v);
-        alert('Zoom URLを保存しました');
-      })()">保存</button>
-    </div>
     <div class="modal-footer" style="flex-wrap:wrap;gap:8px;">
       <button class="btn btn-gold btn-sm" onclick="(async()=>{
         if(!gistToken||gistToken==='none'){alert('GitHubトークンが設定されていません');return;}
@@ -2971,17 +2960,11 @@ function renderInboxDetail(id) {
             <div class="form-field"><label style="font-size:11px;">所要時間（分）</label><input id="mtg-dur-${m.id}" type="number" value="60"></div>
             <div class="form-field"><label style="font-size:11px;">お客様表記</label><input id="mtg-cust-${m.id}" placeholder="例: 田中様"></div>
           </div>
-          <div class="form-field"><label style="font-size:11px;">形式</label>
-            <select id="mtg-fmt-${m.id}">
-              <option value="inperson">対面（会議室A→C→D→Eの順で空き部屋を自動確保）</option>
-              <option value="online">オンライン（Zoomを自動作成）</option>
-            </select>
-          </div>
+          <div style="font-size:11px;color:var(--text3);margin-top:4px;">会議室A→C→D→Eの順で空き部屋を自動確認し、空いている部屋を確保してカレンダーに登録します。</div>
           <button class="btn btn-gold btn-sm" style="margin-top:6px;" onclick="createMeetingFromInbox('${m.id}', this)">📅 予定を作成</button>
           ${m.meetingResult ? `<div class="inbox-candidate-box" style="margin-top:8px;">
             <div>✅ 登録済み（${fmtDateTime(m.meetingResult.createdAt)}）</div>
             ${m.meetingResult.room ? `<div>会場: ${escHtml(m.meetingResult.room)}</div>` : ''}
-            ${m.meetingResult.zoomUrl ? `<div>Zoom: <a href="${escHtml(m.meetingResult.zoomUrl)}" target="_blank" rel="noopener">${escHtml(m.meetingResult.zoomUrl)}</a></div>` : ''}
             ${m.meetingResult.eventLink ? `<div><a href="${escHtml(m.meetingResult.eventLink)}" target="_blank" rel="noopener">カレンダーで開く →</a></div>` : ''}
           </div>` : ''}
         </div>
@@ -3172,8 +3155,16 @@ async function aiGenerateReply(id, btn) {
   const instruction = document.getElementById(`reply-summary-${id}`)?.value || '';
   const p = m.projectId ? state.projects[m.projectId] : null;
   const sys = 'あなたは日本の法律事務所の秘書アシスタントです。丁寧なビジネス日本語でメール返信文を作成します。';
-  const zoomNote = m.meetingResult?.zoomUrl ? `\n打ち合わせはオンライン(Zoom)で確定しています。以下のZoom参加URLを本文に必ず含めてください。\nZoom参加URL: ${m.meetingResult.zoomUrl}\n` : '';
-  const usr = `以下の受信メッセージへの返信メールを作成してください。\n${p ? `関連案件: ${p.name}\n` : ''}差出人: ${m.sender || ''}\n件名: ${m.subject || ''}\n本文:\n${(m.body || '').slice(0, 3000)}\n${zoomNote}\n返信の方向性（任意）: ${instruction || '（特になし。内容を踏まえ丁寧に返信）'}\n\n本文のみを出力してください（件名や署名は不要です）。`;
+  let scheduleNote = '';
+  if (googleAccessToken && Date.now() < googleTokenExpiresAt - 30000) {
+    try {
+      const slots = await getMyOpenSlots(googleAccessToken);
+      if (slots.length) {
+        scheduleNote = `\n自分（藤野）の空き時間の候補です。相手が日程調整を求めている場合のみ、この中から2〜3件を提案してください（不要なら使わなくて構いません）:\n${slots.map(fmtSlotJa).map(s => `- ${s}`).join('\n')}\n`;
+      }
+    } catch (e) { /* 空き時間取得に失敗しても返信生成は継続する */ }
+  }
+  const usr = `以下の受信メッセージへの返信メールを作成してください。\n${p ? `関連案件: ${p.name}\n` : ''}差出人: ${m.sender || ''}\n件名: ${m.subject || ''}\n本文:\n${(m.body || '').slice(0, 3000)}\n${scheduleNote}\n返信の方向性（任意）: ${instruction || '（特になし。内容を踏まえ丁寧に返信）'}\n\n本文のみを出力してください（件名や署名は不要です）。`;
   if (btn) { btn.disabled = true; btn.textContent = '生成中...'; }
   const result = await callClaude(sys, usr);
   if (btn) { btn.disabled = false; btn.textContent = '🤖 返信ドラフトを作る'; }
@@ -3373,7 +3364,7 @@ async function startCaseReview(id, btn) {
 }
 
 // ============================================================
-// 打ち合わせ日程（Googleカレンダー連携 / Zoom自動作成）
+// 打ち合わせ日程（Googleカレンダー連携: 会議室自動確保 / 自分の空き時間確認）
 // ============================================================
 function googleSignIn() {
   const clientId = localStorage.getItem('fujino_google_client_id');
@@ -3446,17 +3437,44 @@ async function pickAvailableRoom(token, startISO, endISO) {
   }
   return null;
 }
-async function createZoomMeeting(topic, startLocalISO, duration) {
-  const { url, token } = mailBackendConfig();
-  if (!url || !token) throw new Error('先にサイドバーの「⚙ API設定確認」でメール連携サーバーのURLとAPIトークンを設定してください。');
-  const res = await fetch(`${url}/zoom/meetings`, {
+// 自分（primaryカレンダー）の平日9-18時の空き枠を最大5件返す（返信ドラフト作成時の日程提案に使用）
+async function getMyOpenSlots(token, days) {
+  days = days || 14;
+  const now = new Date();
+  const rangeEnd = new Date(now); rangeEnd.setDate(rangeEnd.getDate() + days);
+  const res = await fetch('https://www.googleapis.com/calendar/v3/freeBusy', {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ topic, startTime: startLocalISO, duration }),
+    body: JSON.stringify({ timeMin: now.toISOString(), timeMax: rangeEnd.toISOString(), items: [{ id: 'primary' }] }),
   });
   const json = await res.json();
-  if (!res.ok) throw new Error(json.error || 'Zoomミーティングの作成に失敗しました');
-  return json;
+  if (!res.ok) throw new Error(json.error?.message || '予定の取得に失敗しました');
+  const busy = (json.calendars?.primary?.busy || []).map(b => ({ start: new Date(b.start), end: new Date(b.end) }));
+  const slots = [];
+  for (let d = 0; d < days && slots.length < 5; d++) {
+    const day = new Date(now); day.setDate(day.getDate() + d); day.setHours(0, 0, 0, 0);
+    if (day.getDay() === 0 || day.getDay() === 6) continue;
+    const dayStart = new Date(day); dayStart.setHours(9, 0, 0, 0);
+    const dayEnd = new Date(day); dayEnd.setHours(18, 0, 0, 0);
+    if (dayEnd <= now) continue;
+    let cursor = dayStart < now ? now : dayStart;
+    const dayBusy = busy.filter(b => b.start < dayEnd && b.end > dayStart).sort((a, b) => a.start - b.start);
+    for (const b of dayBusy) {
+      if (slots.length >= 5) break;
+      if (b.start - cursor >= 60 * 60 * 1000) slots.push({ start: new Date(cursor), end: new Date(b.start) });
+      if (b.end > cursor) cursor = b.end;
+    }
+    if (slots.length < 5 && dayEnd - cursor >= 60 * 60 * 1000) slots.push({ start: new Date(cursor), end: dayEnd });
+  }
+  return slots.slice(0, 5);
+}
+function fmtSlotJa(slot) {
+  const w = ['日', '月', '火', '水', '木', '金', '土'][slot.start.getDay()];
+  const pad = (n) => String(n).padStart(2, '0');
+  const dateStr = `${slot.start.getMonth() + 1}/${slot.start.getDate()}(${w})`;
+  const startStr = `${pad(slot.start.getHours())}:${pad(slot.start.getMinutes())}`;
+  const endStr = `${pad(slot.end.getHours())}:${pad(slot.end.getMinutes())}`;
+  return `${dateStr} ${startStr}〜${endStr}`;
 }
 async function createCalendarEvent(token, { summary, startISO, endISO, location, description, roomEmail }) {
   const body = {
@@ -3480,18 +3498,17 @@ async function aiExtractMeeting(id, btn) {
   const m = state.inbox[id];
   if (!m) return;
   const sys = 'あなたは法律事務所の秘書アシスタントです。メール本文から打ち合わせの日程情報を抽出します。';
-  const usr = `以下のメールから、打ち合わせの日程情報を抽出してください。現在の日付は${todayStr()}です。\n件名: ${m.subject || ''}\n本文:\n${(m.body || '').slice(0, 3000)}\n\n出力形式（この形式のみ、説明不要）:\n日付: <YYYY-MM-DD、不明ならUNKNOWN>\n開始時刻: <HH:MM（24時間表記）、不明ならUNKNOWN>\n所要時間: <分数の数字のみ、不明なら60>\nお客様表記: <例: 田中様>\n形式: <対面 または オンライン、不明ならUNKNOWN>`;
+  const usr = `以下のメールから、打ち合わせの日程情報を抽出してください。現在の日付は${todayStr()}です。\n件名: ${m.subject || ''}\n本文:\n${(m.body || '').slice(0, 3000)}\n\n出力形式（この形式のみ、説明不要）:\n日付: <YYYY-MM-DD、不明ならUNKNOWN>\n開始時刻: <HH:MM（24時間表記）、不明ならUNKNOWN>\n所要時間: <分数の数字のみ、不明なら60>\nお客様表記: <例: 田中様>`;
   if (btn) { btn.disabled = true; btn.textContent = '抽出中...'; }
   const result = await callClaude(sys, usr);
   if (btn) { btn.disabled = false; btn.textContent = '🤖 メールから日程を抽出'; }
   if (!result) return;
   const get = (label) => { const mt = result.match(new RegExp(label + '[:：]\\s*(.+)')); return mt ? mt[1].trim() : ''; };
-  const date = get('日付'), time = get('開始時刻'), dur = get('所要時間'), cust = get('お客様表記'), fmt = get('形式');
+  const date = get('日付'), time = get('開始時刻'), dur = get('所要時間'), cust = get('お客様表記');
   if (date && date !== 'UNKNOWN' && document.getElementById(`mtg-date-${id}`)) document.getElementById(`mtg-date-${id}`).value = date;
   if (time && time !== 'UNKNOWN' && document.getElementById(`mtg-time-${id}`)) document.getElementById(`mtg-time-${id}`).value = time;
   if (dur && /^\d+$/.test(dur) && document.getElementById(`mtg-dur-${id}`)) document.getElementById(`mtg-dur-${id}`).value = dur;
   if (cust && cust !== 'UNKNOWN' && document.getElementById(`mtg-cust-${id}`)) document.getElementById(`mtg-cust-${id}`).value = cust;
-  if ((fmt === 'オンライン' || fmt === '対面') && document.getElementById(`mtg-fmt-${id}`)) document.getElementById(`mtg-fmt-${id}`).value = fmt === 'オンライン' ? 'online' : 'inperson';
 }
 async function createMeetingFromInbox(id, btn) {
   const m = state.inbox[id];
@@ -3500,7 +3517,6 @@ async function createMeetingFromInbox(id, btn) {
   const time = document.getElementById(`mtg-time-${id}`)?.value;
   const duration = Number(document.getElementById(`mtg-dur-${id}`)?.value || 60);
   const cust = (document.getElementById(`mtg-cust-${id}`)?.value || '').trim();
-  const fmt = document.getElementById(`mtg-fmt-${id}`)?.value || 'inperson';
   if (!date || !time || !cust) { alert('日付・開始時刻・お客様表記を入力してください'); return; }
   const startISO = `${date}T${time}:00+09:00`;
   const endDateObj = new Date(`${date}T${time}:00+09:00`);
@@ -3510,35 +3526,20 @@ async function createMeetingFromInbox(id, btn) {
   if (btn) { btn.disabled = true; btn.textContent = '作成中...'; }
   try {
     const token = await ensureGoogleAuth();
-    let location = '', description = '', roomEmail = null, zoomUrl = null;
-    if (fmt === 'online') {
-      zoomUrl = localStorage.getItem('fujino_zoom_personal_url');
-      if (!zoomUrl) { throw new Error('先にサイドバーの「⚙ API設定確認」でZoomのパーソナルミーティングURLを設定してください。'); }
-      location = 'オンライン(Zoom)';
-      description = `Zoom参加URL: ${zoomUrl}`;
-    } else {
-      const room = await pickAvailableRoom(token, startISO, endISO);
-      if (!room) {
-        alert('会議室A・C・D・Eすべて空きがありませんでした。手動で調整してください。');
-        if (btn) { btn.disabled = false; btn.textContent = '📅 予定を作成'; }
-        return;
-      }
-      location = room.label;
-      description = `${room.label}を使用`;
-      roomEmail = room.email;
+    const room = await pickAvailableRoom(token, startISO, endISO);
+    if (!room) {
+      alert('会議室A・C・D・Eすべて空きがありませんでした。手動で調整してください。');
+      if (btn) { btn.disabled = false; btn.textContent = '📅 予定を作成'; }
+      return;
     }
-    const event = await createCalendarEvent(token, { summary, startISO, endISO, location, description, roomEmail });
-    m.meetingResult = {
-      eventLink: event.htmlLink, zoomUrl,
-      room: fmt === 'inperson' ? location : null,
-      createdAt: new Date().toISOString(),
-    };
-    if (zoomUrl) {
-      m.replyDraft = (m.replyDraft ? m.replyDraft + '\n\n' : '') + `Zoom参加URL: ${zoomUrl}`;
-    }
+    const event = await createCalendarEvent(token, {
+      summary, startISO, endISO,
+      location: room.label, description: `${room.label}を使用`, roomEmail: room.email,
+    });
+    m.meetingResult = { eventLink: event.htmlLink, room: room.label, createdAt: new Date().toISOString() };
     scheduleSave();
     renderPage();
-    alert('カレンダーに登録しました' + (zoomUrl ? '（ZoomURLを返信ドラフトに追加しました）' : ''));
+    alert('カレンダーに登録しました（' + room.label + '）');
   } catch (e) {
     alert('作成に失敗しました: ' + e.message);
     if (btn) { btn.disabled = false; btn.textContent = '📅 予定を作成'; }
