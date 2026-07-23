@@ -2826,10 +2826,15 @@ async function openMailImportModal() {
   mailImportCandidates = [];
   openModal(`
     <div class="modal-title">メールを取り込む</div>
+    <div style="font-size:11px;margin-bottom:6px;">
+      <a href="javascript:void(0)" onclick="document.querySelectorAll('#mail-import-list .mail-import-cb:not(:disabled)').forEach(cb=>cb.checked=true); updateMailImportCount();">すべて選択</a>
+      ・
+      <a href="javascript:void(0)" onclick="document.querySelectorAll('#mail-import-list .mail-import-cb').forEach(cb=>cb.checked=false); updateMailImportCount();">すべて解除</a>
+    </div>
     <div id="mail-import-list" style="max-height:420px;overflow-y:auto;font-size:13px;">読み込み中...</div>
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeModal()">閉じる</button>
-      <button id="mail-import-all-btn" class="btn btn-gold" style="display:none;" onclick="importAllMailMessages(this)">📥 すべて取り込む</button>
+      <button id="mail-import-all-btn" class="btn btn-gold" style="display:none;" onclick="importAllMailMessages(this)">📥 選択した項目を取り込む</button>
     </div>
   `);
   try {
@@ -2840,28 +2845,37 @@ async function openMailImportModal() {
     const already = new Set(Object.values(state.inbox).map(m => m.sourceUid).filter(Boolean));
     const msgs = json.messages || [];
     if (!msgs.length) { listEl.innerHTML = `<p style="color:var(--text3);">メールがありません</p>`; return; }
-    mailImportCandidates = msgs.filter(m => !already.has(m.uid));
-    listEl.innerHTML = msgs.map(m => `
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 4px;border-bottom:1px solid var(--border);">
-        <div style="min-width:0;">
+    mailImportCandidates = msgs;
+    listEl.innerHTML = msgs.map((m, i) => {
+      const isImported = already.has(m.uid);
+      return `
+      <div style="display:flex;align-items:center;gap:8px;padding:8px 4px;border-bottom:1px solid var(--border);">
+        <input type="checkbox" class="mail-import-cb" data-idx="${i}" ${isImported ? 'disabled' : 'checked'} onchange="updateMailImportCount()">
+        <div style="min-width:0;flex:1;">
           <div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${m.hasAttachments ? '📎 ' : ''}${escHtml(m.subject)}</div>
           <div style="font-size:11px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escHtml(m.from)} / ${fmtDateTime(m.date)}</div>
         </div>
-        <span style="font-size:11px;color:var(--text3);flex-shrink:0;">${already.has(m.uid) ? '取込済' : '未取込'}</span>
-      </div>`).join('');
-    const allBtn = document.getElementById('mail-import-all-btn');
-    if (allBtn && mailImportCandidates.length) {
-      allBtn.style.display = '';
-      allBtn.textContent = `📥 すべて取り込む（${mailImportCandidates.length}件）`;
-    }
+        <span style="font-size:11px;color:var(--text3);flex-shrink:0;">${isImported ? '取込済' : ''}</span>
+      </div>`;
+    }).join('');
+    updateMailImportCount();
   } catch (e) {
     const listEl = document.getElementById('mail-import-list');
     if (listEl) listEl.innerHTML = `<p style="color:var(--red);">接続失敗: ${escHtml(e.message)}</p>`;
   }
 }
+function updateMailImportCount() {
+  const checked = document.querySelectorAll('#mail-import-list .mail-import-cb:checked').length;
+  const btn = document.getElementById('mail-import-all-btn');
+  if (btn) {
+    btn.style.display = checked ? '' : 'none';
+    btn.textContent = `📥 選択した項目を取り込む（${checked}件）`;
+  }
+}
 async function importAllMailMessages(btn) {
   const { url, token } = mailBackendConfig();
-  const candidates = mailImportCandidates;
+  const checkedIdx = Array.from(document.querySelectorAll('#mail-import-list .mail-import-cb:checked')).map(cb => Number(cb.dataset.idx));
+  const candidates = checkedIdx.map(i => mailImportCandidates[i]).filter(Boolean);
   if (!candidates.length) return;
   if (btn) btn.disabled = true;
   let imported = 0, failed = 0;
@@ -2917,10 +2931,15 @@ async function openSlackImportModal() {
   slackImportCandidates = [];
   openModal(`
     <div class="modal-title">Slackを取り込む</div>
+    <div style="font-size:11px;margin-bottom:6px;">
+      <a href="javascript:void(0)" onclick="document.querySelectorAll('#slack-import-list .slack-import-cb:not(:disabled)').forEach(cb=>cb.checked=true); updateSlackImportCount();">すべて選択</a>
+      ・
+      <a href="javascript:void(0)" onclick="document.querySelectorAll('#slack-import-list .slack-import-cb').forEach(cb=>cb.checked=false); updateSlackImportCount();">すべて解除</a>
+    </div>
     <div id="slack-import-list" style="max-height:420px;overflow-y:auto;font-size:13px;">読み込み中...</div>
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeModal()">閉じる</button>
-      <button id="slack-import-all-btn" class="btn btn-gold" style="display:none;" onclick="importAllSlackMessages(this)">💬 すべて取り込む</button>
+      <button id="slack-import-all-btn" class="btn btn-gold" style="display:none;" onclick="importAllSlackMessages(this)">💬 選択した項目を取り込む</button>
     </div>
   `);
   try {
@@ -2931,32 +2950,39 @@ async function openSlackImportModal() {
     const already = new Set(Object.values(state.inbox).filter(m => m.source === 'slack').map(m => m.sourceUid).filter(Boolean));
     const msgs = json.messages || [];
     if (!msgs.length) { listEl.innerHTML = `<p style="color:var(--text3);">新着のメンション・DMがありません</p>`; return; }
-    slackImportCandidates = msgs.filter(m => !already.has(`${m.channel}_${m.ts}`));
-    listEl.innerHTML = msgs.map(m => {
+    slackImportCandidates = msgs;
+    listEl.innerHTML = msgs.map((m, i) => {
       const uid = `${m.channel}_${m.ts}`;
+      const isImported = already.has(uid);
       const kindLabel = m.kind === 'mention' ? 'メンション' : 'DM';
       const snippet = (m.text || '').replace(/\s+/g, ' ').slice(0, 60);
       return `
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 4px;border-bottom:1px solid var(--border);">
-        <div style="min-width:0;">
+      <div style="display:flex;align-items:center;gap:8px;padding:8px 4px;border-bottom:1px solid var(--border);">
+        <input type="checkbox" class="slack-import-cb" data-idx="${i}" ${isImported ? 'disabled' : 'checked'} onchange="updateSlackImportCount()">
+        <div style="min-width:0;flex:1;">
           <div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">[${kindLabel}] ${escHtml(m.channelLabel)} - ${escHtml(m.fromName)}</div>
           <div style="font-size:11px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escHtml(snippet)}</div>
         </div>
-        <span style="font-size:11px;color:var(--text3);flex-shrink:0;">${already.has(uid) ? '取込済' : '未取込'}</span>
+        <span style="font-size:11px;color:var(--text3);flex-shrink:0;">${isImported ? '取込済' : ''}</span>
       </div>`;
     }).join('');
-    const allBtn = document.getElementById('slack-import-all-btn');
-    if (allBtn && slackImportCandidates.length) {
-      allBtn.style.display = '';
-      allBtn.textContent = `💬 すべて取り込む（${slackImportCandidates.length}件）`;
-    }
+    updateSlackImportCount();
   } catch (e) {
     const listEl = document.getElementById('slack-import-list');
     if (listEl) listEl.innerHTML = `<p style="color:var(--red);">接続失敗: ${escHtml(e.message)}</p>`;
   }
 }
+function updateSlackImportCount() {
+  const checked = document.querySelectorAll('#slack-import-list .slack-import-cb:checked').length;
+  const btn = document.getElementById('slack-import-all-btn');
+  if (btn) {
+    btn.style.display = checked ? '' : 'none';
+    btn.textContent = `💬 選択した項目を取り込む（${checked}件）`;
+  }
+}
 function importAllSlackMessages(btn) {
-  const candidates = slackImportCandidates;
+  const checkedIdx = Array.from(document.querySelectorAll('#slack-import-list .slack-import-cb:checked')).map(cb => Number(cb.dataset.idx));
+  const candidates = checkedIdx.map(i => slackImportCandidates[i]).filter(Boolean);
   if (!candidates.length) return;
   if (btn) btn.disabled = true;
   candidates.forEach(m => {
