@@ -2770,7 +2770,11 @@ function renderInboxDetail(id) {
             <button class="btn btn-outline btn-sm" onclick="aiClassifyProject('${m.id}', this)">🤖 AIで案件判定</button>
           </div>
           <div style="font-size:11px;color:var(--text3);margin-top:6px;">AIが判定した案件候補${m.aiConfidence ? `（信頼度: ${escHtml(m.aiConfidence)}）` : ''}</div>
-          <div class="inbox-candidate-box">${cand ? escHtml(cand.name) : '候補はありません。'}</div>
+          <div class="inbox-candidate-box" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+            <span>${cand ? escHtml(cand.name) : '候補はありません。'}</span>
+            ${cand && m.projectId !== cand.id ? `<button class="btn btn-gold btn-sm" style="flex-shrink:0;" onclick="assignInboxProject('${m.id}','${cand.id}')">✓ この案件で確定</button>` : ''}
+            ${cand && m.projectId === cand.id ? `<span style="color:var(--green);font-size:11px;flex-shrink:0;">✓ 確定済み</span>` : ''}
+          </div>
           <div style="font-size:11px;color:var(--text3);margin-top:10px;">紐づけられた関連案件</div>
           <div class="inbox-candidate-box">現在: ${p ? escHtml(p.name) : '未紐づけ'}</div>
           <button class="btn btn-outline btn-sm" onclick="openInboxProjectPicker('${m.id}')">正しい案件を選択</button>
