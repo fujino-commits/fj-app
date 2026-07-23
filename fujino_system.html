@@ -7,6 +7,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/mammoth@1.7.2/mammoth.browser.min.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
 :root {
   --bg: #0a0a0a;
@@ -510,6 +511,9 @@ let salesYear = new Date().getFullYear();
 let sortables = [];
 let timerInterval = null;
 let saveTimeout = null;
+let googleAccessToken = null;
+let googleTokenExpiresAt = 0;
+let googleTokenClient = null;
 let projListSearch = '';
 let showClosedProjects = false;
 let sidebarSearch = '';
@@ -864,6 +868,29 @@ function openApiKeyModal() {
         }catch(e){el.textContent='❌ 接続失敗: '+e.message;el.style.color='var(--red)';}
       })()">接続テスト</button>
       <div id="mailbe-test-result" style="font-size:12px;margin-top:6px;"></div>
+    </div>
+    <div class="form-field" style="border-top:1px solid var(--border);margin-top:8px;padding-top:12px;">
+      <label>📅 Googleカレンダー連携</label>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:6px;">受信箱の「打ち合わせ日程」から、打ち合わせをGoogleカレンダーに直接登録するための設定です。</div>
+      <div class="form-field"><label style="font-size:11px;">OAuthクライアントID</label><input id="gcal-client-id" type="text" value="${escHtml(localStorage.getItem('fujino_google_client_id')||'')}" placeholder="xxxxxxxxxx.apps.googleusercontent.com" style="font-family:monospace;font-size:12px;"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <div class="form-field"><label style="font-size:11px;">会議室A（最優先）のメールアドレス</label><input id="gcal-room-a" type="text" value="${escHtml(localStorage.getItem('fujino_room_a')||'')}" placeholder="room-a@resource.calendar.google.com" style="font-family:monospace;font-size:12px;"></div>
+        <div class="form-field"><label style="font-size:11px;">会議室C（2番目）のメールアドレス</label><input id="gcal-room-c" type="text" value="${escHtml(localStorage.getItem('fujino_room_c')||'')}" placeholder="room-c@resource.calendar.google.com" style="font-family:monospace;font-size:12px;"></div>
+        <div class="form-field"><label style="font-size:11px;">会議室D（3番目）のメールアドレス</label><input id="gcal-room-d" type="text" value="${escHtml(localStorage.getItem('fujino_room_d')||'')}" placeholder="room-d@resource.calendar.google.com" style="font-family:monospace;font-size:12px;"></div>
+        <div class="form-field"><label style="font-size:11px;">会議室E（4番目）のメールアドレス</label><input id="gcal-room-e" type="text" value="${escHtml(localStorage.getItem('fujino_room_e')||'')}" placeholder="room-e@resource.calendar.google.com" style="font-family:monospace;font-size:12px;"></div>
+      </div>
+      <button class="btn btn-sm btn-gold" style="margin-top:6px;" onclick="(()=>{
+        const c=document.getElementById('gcal-client-id').value.trim();
+        if(!c){alert('OAuthクライアントIDを入力してください');return;}
+        localStorage.setItem('fujino_google_client_id',c);
+        localStorage.setItem('fujino_room_a',document.getElementById('gcal-room-a').value.trim());
+        localStorage.setItem('fujino_room_c',document.getElementById('gcal-room-c').value.trim());
+        localStorage.setItem('fujino_room_d',document.getElementById('gcal-room-d').value.trim());
+        localStorage.setItem('fujino_room_e',document.getElementById('gcal-room-e').value.trim());
+        alert('Googleカレンダー連携設定を保存しました');
+      })()">保存</button>
+      <button class="btn btn-sm btn-outline" onclick="googleSignIn()">Googleでログイン</button>
+      <div id="gcal-login-status" style="font-size:12px;margin-top:6px;color:var(--text3);">${googleAccessToken ? '✅ ログイン済み' : '未ログイン'}</div>
     </div>
     <div class="modal-footer" style="flex-wrap:wrap;gap:8px;">
       <button class="btn btn-gold btn-sm" onclick="(async()=>{
@@ -2925,6 +2952,29 @@ function renderInboxDetail(id) {
           <div style="font-size:11px;color:var(--text3);margin-top:6px;">※このアプリからは直接送信できません。コピーして外部メーラ/Slackで送信してください。</div>
         </div>
         <div class="inbox-panel">
+          <div class="inbox-panel-title">打ち合わせ日程</div>
+          <button class="btn btn-outline btn-sm" onclick="aiExtractMeeting('${m.id}', this)">🤖 メールから日程を抽出</button>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;">
+            <div class="form-field"><label style="font-size:11px;">日付</label><input id="mtg-date-${m.id}" type="date"></div>
+            <div class="form-field"><label style="font-size:11px;">開始時刻</label><input id="mtg-time-${m.id}" type="time"></div>
+            <div class="form-field"><label style="font-size:11px;">所要時間（分）</label><input id="mtg-dur-${m.id}" type="number" value="60"></div>
+            <div class="form-field"><label style="font-size:11px;">お客様表記</label><input id="mtg-cust-${m.id}" placeholder="例: 田中様"></div>
+          </div>
+          <div class="form-field"><label style="font-size:11px;">形式</label>
+            <select id="mtg-fmt-${m.id}">
+              <option value="inperson">対面（会議室A→C→D→Eの順で空き部屋を自動確保）</option>
+              <option value="online">オンライン（Zoomを自動作成）</option>
+            </select>
+          </div>
+          <button class="btn btn-gold btn-sm" style="margin-top:6px;" onclick="createMeetingFromInbox('${m.id}', this)">📅 予定を作成</button>
+          ${m.meetingResult ? `<div class="inbox-candidate-box" style="margin-top:8px;">
+            <div>✅ 登録済み（${fmtDateTime(m.meetingResult.createdAt)}）</div>
+            ${m.meetingResult.room ? `<div>会場: ${escHtml(m.meetingResult.room)}</div>` : ''}
+            ${m.meetingResult.zoomUrl ? `<div>Zoom: <a href="${escHtml(m.meetingResult.zoomUrl)}" target="_blank" rel="noopener">${escHtml(m.meetingResult.zoomUrl)}</a></div>` : ''}
+            ${m.meetingResult.eventLink ? `<div><a href="${escHtml(m.meetingResult.eventLink)}" target="_blank" rel="noopener">カレンダーで開く →</a></div>` : ''}
+          </div>` : ''}
+        </div>
+        <div class="inbox-panel">
           <div class="inbox-panel-title">タスクを作成</div>
           ${!m.projectId ? `<div class="inbox-hint-box">紐づけられた案件がありません。先に案件の紐づけをお勧めします。</div>` : ''}
           <div class="form-field"><label>タスク名</label><input id="inbox-task-name-${m.id}" placeholder="タスク名"></div>
@@ -3111,7 +3161,8 @@ async function aiGenerateReply(id, btn) {
   const instruction = document.getElementById(`reply-summary-${id}`)?.value || '';
   const p = m.projectId ? state.projects[m.projectId] : null;
   const sys = 'あなたは日本の法律事務所の秘書アシスタントです。丁寧なビジネス日本語でメール返信文を作成します。';
-  const usr = `以下の受信メッセージへの返信メールを作成してください。\n${p ? `関連案件: ${p.name}\n` : ''}差出人: ${m.sender || ''}\n件名: ${m.subject || ''}\n本文:\n${(m.body || '').slice(0, 3000)}\n\n返信の方向性（任意）: ${instruction || '（特になし。内容を踏まえ丁寧に返信）'}\n\n本文のみを出力してください（件名や署名は不要です）。`;
+  const zoomNote = m.meetingResult?.zoomUrl ? `\n打ち合わせはオンライン(Zoom)で確定しています。以下のZoom参加URLを本文に必ず含めてください。\nZoom参加URL: ${m.meetingResult.zoomUrl}\n` : '';
+  const usr = `以下の受信メッセージへの返信メールを作成してください。\n${p ? `関連案件: ${p.name}\n` : ''}差出人: ${m.sender || ''}\n件名: ${m.subject || ''}\n本文:\n${(m.body || '').slice(0, 3000)}\n${zoomNote}\n返信の方向性（任意）: ${instruction || '（特になし。内容を踏まえ丁寧に返信）'}\n\n本文のみを出力してください（件名や署名は不要です）。`;
   if (btn) { btn.disabled = true; btn.textContent = '生成中...'; }
   const result = await callClaude(sys, usr);
   if (btn) { btn.disabled = false; btn.textContent = '🤖 返信ドラフトを作る'; }
@@ -3308,6 +3359,179 @@ async function startCaseReview(id, btn) {
   m.review = { category: categoryKey, output: result, generatedAt: new Date().toISOString(), model };
   scheduleSave();
   renderPage();
+}
+
+// ============================================================
+// 打ち合わせ日程（Googleカレンダー連携 / Zoom自動作成）
+// ============================================================
+function googleSignIn() {
+  const clientId = localStorage.getItem('fujino_google_client_id');
+  if (!clientId) { alert('先にサイドバーの「⚙ API設定確認」でGoogleカレンダーのOAuthクライアントIDを設定してください。'); return; }
+  if (typeof google === 'undefined' || !google.accounts) { alert('Google連携ライブラリの読み込みに失敗しました（通信環境をご確認ください）'); return; }
+  if (!googleTokenClient) {
+    googleTokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: clientId,
+      scope: 'https://www.googleapis.com/auth/calendar',
+      callback: () => {},
+    });
+  }
+  googleTokenClient.callback = (resp) => {
+    if (resp.error) { alert('Googleログインに失敗しました: ' + resp.error); return; }
+    googleAccessToken = resp.access_token;
+    googleTokenExpiresAt = Date.now() + (resp.expires_in || 3500) * 1000;
+    const el = document.getElementById('gcal-login-status');
+    if (el) { el.textContent = '✅ ログイン済み'; el.style.color = 'var(--green)'; }
+    alert('Googleにログインしました');
+  };
+  googleTokenClient.requestAccessToken();
+}
+function ensureGoogleAuth() {
+  return new Promise((resolve, reject) => {
+    if (googleAccessToken && Date.now() < googleTokenExpiresAt - 30000) { resolve(googleAccessToken); return; }
+    const clientId = localStorage.getItem('fujino_google_client_id');
+    if (!clientId) { reject(new Error('先にサイドバーの「⚙ API設定確認」でGoogleカレンダーのOAuthクライアントIDを設定してください。')); return; }
+    if (typeof google === 'undefined' || !google.accounts) { reject(new Error('Google連携ライブラリの読み込みに失敗しました（通信環境をご確認ください）')); return; }
+    if (!googleTokenClient) {
+      googleTokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: clientId,
+        scope: 'https://www.googleapis.com/auth/calendar',
+        callback: () => {},
+      });
+    }
+    googleTokenClient.callback = (resp) => {
+      if (resp.error) { reject(new Error('Googleログインに失敗しました: ' + resp.error)); return; }
+      googleAccessToken = resp.access_token;
+      googleTokenExpiresAt = Date.now() + (resp.expires_in || 3500) * 1000;
+      const el = document.getElementById('gcal-login-status');
+      if (el) { el.textContent = '✅ ログイン済み'; el.style.color = 'var(--green)'; }
+      resolve(googleAccessToken);
+    };
+    googleTokenClient.requestAccessToken();
+  });
+}
+const MEETING_ROOMS = [
+  { key: 'a', label: '会議室A' },
+  { key: 'c', label: '会議室C' },
+  { key: 'd', label: '会議室D' },
+  { key: 'e', label: '会議室E' },
+];
+async function checkRoomFree(token, roomEmail, startISO, endISO) {
+  const res = await fetch('https://www.googleapis.com/calendar/v3/freeBusy', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ timeMin: startISO, timeMax: endISO, items: [{ id: roomEmail }] }),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error?.message || '会議室の空き状況確認に失敗しました');
+  const busy = json.calendars?.[roomEmail]?.busy || [];
+  return busy.length === 0;
+}
+async function pickAvailableRoom(token, startISO, endISO) {
+  for (const r of MEETING_ROOMS) {
+    const email = localStorage.getItem(`fujino_room_${r.key}`);
+    if (!email) continue;
+    const free = await checkRoomFree(token, email, startISO, endISO);
+    if (free) return { ...r, email };
+  }
+  return null;
+}
+async function createZoomMeeting(topic, startLocalISO, duration) {
+  const { url, token } = mailBackendConfig();
+  if (!url || !token) throw new Error('先にサイドバーの「⚙ API設定確認」でメール連携サーバーのURLとAPIトークンを設定してください。');
+  const res = await fetch(`${url}/zoom/meetings`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ topic, startTime: startLocalISO, duration }),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Zoomミーティングの作成に失敗しました');
+  return json;
+}
+async function createCalendarEvent(token, { summary, startISO, endISO, location, description, roomEmail }) {
+  const body = {
+    summary,
+    location: location || '',
+    description: description || '',
+    start: { dateTime: startISO, timeZone: 'Asia/Tokyo' },
+    end: { dateTime: endISO, timeZone: 'Asia/Tokyo' },
+  };
+  if (roomEmail) body.attendees = [{ email: roomEmail, resource: true }];
+  const res = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error?.message || 'カレンダー予定の作成に失敗しました');
+  return json;
+}
+async function aiExtractMeeting(id, btn) {
+  const m = state.inbox[id];
+  if (!m) return;
+  const sys = 'あなたは法律事務所の秘書アシスタントです。メール本文から打ち合わせの日程情報を抽出します。';
+  const usr = `以下のメールから、打ち合わせの日程情報を抽出してください。現在の日付は${todayStr()}です。\n件名: ${m.subject || ''}\n本文:\n${(m.body || '').slice(0, 3000)}\n\n出力形式（この形式のみ、説明不要）:\n日付: <YYYY-MM-DD、不明ならUNKNOWN>\n開始時刻: <HH:MM（24時間表記）、不明ならUNKNOWN>\n所要時間: <分数の数字のみ、不明なら60>\nお客様表記: <例: 田中様>\n形式: <対面 または オンライン、不明ならUNKNOWN>`;
+  if (btn) { btn.disabled = true; btn.textContent = '抽出中...'; }
+  const result = await callClaude(sys, usr);
+  if (btn) { btn.disabled = false; btn.textContent = '🤖 メールから日程を抽出'; }
+  if (!result) return;
+  const get = (label) => { const mt = result.match(new RegExp(label + '[:：]\\s*(.+)')); return mt ? mt[1].trim() : ''; };
+  const date = get('日付'), time = get('開始時刻'), dur = get('所要時間'), cust = get('お客様表記'), fmt = get('形式');
+  if (date && date !== 'UNKNOWN' && document.getElementById(`mtg-date-${id}`)) document.getElementById(`mtg-date-${id}`).value = date;
+  if (time && time !== 'UNKNOWN' && document.getElementById(`mtg-time-${id}`)) document.getElementById(`mtg-time-${id}`).value = time;
+  if (dur && /^\d+$/.test(dur) && document.getElementById(`mtg-dur-${id}`)) document.getElementById(`mtg-dur-${id}`).value = dur;
+  if (cust && cust !== 'UNKNOWN' && document.getElementById(`mtg-cust-${id}`)) document.getElementById(`mtg-cust-${id}`).value = cust;
+  if ((fmt === 'オンライン' || fmt === '対面') && document.getElementById(`mtg-fmt-${id}`)) document.getElementById(`mtg-fmt-${id}`).value = fmt === 'オンライン' ? 'online' : 'inperson';
+}
+async function createMeetingFromInbox(id, btn) {
+  const m = state.inbox[id];
+  if (!m) return;
+  const date = document.getElementById(`mtg-date-${id}`)?.value;
+  const time = document.getElementById(`mtg-time-${id}`)?.value;
+  const duration = Number(document.getElementById(`mtg-dur-${id}`)?.value || 60);
+  const cust = (document.getElementById(`mtg-cust-${id}`)?.value || '').trim();
+  const fmt = document.getElementById(`mtg-fmt-${id}`)?.value || 'inperson';
+  if (!date || !time || !cust) { alert('日付・開始時刻・お客様表記を入力してください'); return; }
+  const startISO = `${date}T${time}:00+09:00`;
+  const endDateObj = new Date(`${date}T${time}:00+09:00`);
+  endDateObj.setMinutes(endDateObj.getMinutes() + duration);
+  const endISO = endDateObj.toISOString();
+  const summary = `${time} ${cust}`;
+  if (btn) { btn.disabled = true; btn.textContent = '作成中...'; }
+  try {
+    const token = await ensureGoogleAuth();
+    let location = '', description = '', roomEmail = null, zoomUrl = null;
+    if (fmt === 'online') {
+      const zoom = await createZoomMeeting(`${cust} お打ち合わせ`, `${date}T${time}:00`, duration);
+      zoomUrl = zoom.joinUrl;
+      location = 'オンライン(Zoom)';
+      description = `Zoom参加URL: ${zoomUrl}`;
+    } else {
+      const room = await pickAvailableRoom(token, startISO, endISO);
+      if (!room) {
+        alert('会議室A・C・D・Eすべて空きがありませんでした。手動で調整してください。');
+        if (btn) { btn.disabled = false; btn.textContent = '📅 予定を作成'; }
+        return;
+      }
+      location = room.label;
+      description = `${room.label}を使用`;
+      roomEmail = room.email;
+    }
+    const event = await createCalendarEvent(token, { summary, startISO, endISO, location, description, roomEmail });
+    m.meetingResult = {
+      eventLink: event.htmlLink, zoomUrl,
+      room: fmt === 'inperson' ? location : null,
+      createdAt: new Date().toISOString(),
+    };
+    if (zoomUrl) {
+      m.replyDraft = (m.replyDraft ? m.replyDraft + '\n\n' : '') + `Zoom参加URL: ${zoomUrl}`;
+    }
+    scheduleSave();
+    renderPage();
+    alert('カレンダーに登録しました' + (zoomUrl ? '（ZoomURLを返信ドラフトに追加しました）' : ''));
+  } catch (e) {
+    alert('作成に失敗しました: ' + e.message);
+    if (btn) { btn.disabled = false; btn.textContent = '📅 予定を作成'; }
+  }
 }
 
 // ============================================================
