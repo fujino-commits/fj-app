@@ -2737,6 +2737,7 @@ function renderInboxList() {
   <div class="page-header"><h1 class="page-title">受信<span>箱</span></h1>
     <button class="btn btn-outline btn-sm" onclick="openMailImportModal()">📥 メールを取り込む</button>
     <button class="btn btn-outline btn-sm" onclick="openSlackImportModal()">💬 Slackを取り込む</button>
+    <button class="btn btn-outline btn-sm" onclick="syncSlackRepliedStatus(this)">🔄 返信済みSlackを完了にする</button>
     <button class="btn btn-gold btn-sm" onclick="openAddInboxModal()">＋ 手動で追加</button>
   </div>
   <div class="page-content">
@@ -3021,6 +3022,48 @@ function importAllSlackMessages(btn) {
   scheduleSave();
   closeModal();
   navigate('inbox');
+}
+
+// 未対応のSlack取り込み項目のうち、そのチャンネル/DMで最後に発言しているのが
+// 自分自身になっているもの（＝返信済み）を自動で「完了」に移動する
+function parseSlackSourceUid(sourceUid) {
+  const idx = (sourceUid || '').lastIndexOf('_');
+  if (idx < 0) return null;
+  return { channel: sourceUid.slice(0, idx), ts: sourceUid.slice(idx + 1) };
+}
+async function syncSlackRepliedStatus(btn) {
+  const { url, token } = slackBackendConfig();
+  if (!url || !token) {
+    alert('先にサイドバーの「⚙ API設定確認」でSlack連携サーバーのURLとAPIトークンを設定してください。');
+    return;
+  }
+  const targets = Object.values(state.inbox).filter(m => m.source === 'slack' && m.status === 'open' && m.sourceUid);
+  if (!targets.length) { alert('対象の未対応Slack項目がありません。'); return; }
+  const channelIds = [...new Set(targets.map(m => parseSlackSourceUid(m.sourceUid)?.channel).filter(Boolean))];
+  if (btn) { btn.disabled = true; btn.textContent = '確認中...'; }
+  try {
+    const res = await fetch(`${url}/channel-last-sender?channels=${encodeURIComponent(channelIds.join(','))}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const json = await res.json();
+    if (!res.ok) { alert('エラー: ' + (json.error || res.status)); return; }
+    const results = json.results || {};
+    let moved = 0;
+    targets.forEach(m => {
+      const parsed = parseSlackSourceUid(m.sourceUid);
+      const info = parsed ? results[parsed.channel] : null;
+      if (info && info.isSelf) {
+        m.status = 'done';
+        moved++;
+      }
+    });
+    if (moved) { scheduleSave(); navigate('inbox'); }
+    alert(moved ? `${moved}件を完了に移動しました。` : '返信済みの項目はありませんでした。');
+  } catch (e) {
+    alert('接続失敗: ' + e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '🔄 返信済みSlackを完了にする'; }
+  }
 }
 
 function openAddInboxModal() {
