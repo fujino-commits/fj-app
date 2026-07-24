@@ -3544,6 +3544,7 @@ function buildReviewInitialContent(m, categoryKey) {
   content.push({
     type: 'text',
     text: `件名: ${m.subject || ''}\n差出人: ${m.sender || ''}\n本文:\n${(m.body || '').slice(0, 3000)}\n\n上記メッセージ${attachments.length ? '・添付資料' : ''}について、${cat.label}の観点から検討してください。${note}`,
+    cache_control: { type: 'ephemeral' },
   });
   return content;
 }
