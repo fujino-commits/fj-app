@@ -1411,9 +1411,10 @@ function navigate(page, projectId) {
   const prevPage = currentPage;
   currentPage = page;
   currentProjectId = projectId || null;
-  // 受信箱に(詳細画面以外から)来た時、返信済みSlackの自動整理をバックグラウンドで実行
+  // 受信箱に(詳細画面以外から)来た時、返信済みSlack・移動済みメールの自動整理をバックグラウンドで実行
   if (page === 'inbox' && prevPage !== 'inbox' && prevPage !== 'inboxdetail') {
     syncSlackRepliedStatus(null, true);
+    syncMailMovedStatus(null, true);
   }
   // Update nav highlights ('inboxdetail' highlights the '受信箱' nav button)
   const highlightPage = page === 'inboxdetail' ? 'inbox' : page;
@@ -2741,6 +2742,7 @@ function renderInboxList() {
   return `
   <div class="page-header"><h1 class="page-title">受信<span>箱</span></h1>
     <button class="btn btn-outline btn-sm" onclick="openMailImportModal()">📥 メールを取り込む</button>
+    <button class="btn btn-outline btn-sm" onclick="syncMailMovedStatus(this)">🔄 移動済みメールを完了にする</button>
     <button class="btn btn-outline btn-sm" onclick="openSlackImportModal()">💬 Slackを取り込む</button>
     <button class="btn btn-outline btn-sm" onclick="syncSlackRepliedStatus(this)">🔄 返信済みSlackを完了にする</button>
     <button class="btn btn-gold btn-sm" onclick="openAddInboxModal()">＋ 手動で追加</button>
@@ -2934,6 +2936,44 @@ async function importAllMailMessages(btn) {
   closeModal();
   navigate('inbox');
   if (failed) alert(`${imported}件を取り込みました（${failed}件は失敗しました）`);
+}
+
+// 未対応のメール取り込み項目のうち、実際のメールボックス（INBOX）からすでに
+// 移動・削除されているもの（＝対応済みとみなせる）を自動で「完了」に移動する
+async function syncMailMovedStatus(btn, silent) {
+  const { url, token } = mailBackendConfig();
+  if (!url || !token) {
+    if (!silent) alert('先にサイドバーの「⚙ API設定確認」でメール連携サーバーのURLとAPIトークンを設定してください。');
+    return;
+  }
+  const targets = Object.values(state.inbox).filter(m => m.source === 'email' && m.status === 'open' && m.sourceUid != null);
+  if (!targets.length) { if (!silent) alert('対象の未対応メールがありません。'); return; }
+  const uids = [...new Set(targets.map(m => Number(m.sourceUid)).filter(n => Number.isInteger(n)))];
+  if (btn) { btn.disabled = true; btn.textContent = '確認中...'; }
+  try {
+    const res = await fetch(`${url}/messages/exists?uids=${uids.join(',')}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const json = await res.json();
+    if (!res.ok) { if (!silent) alert('エラー: ' + (json.error || res.status)); return; }
+    const existing = new Set((json.existing || []).map(Number));
+    let moved = 0;
+    targets.forEach(m => {
+      if (!existing.has(Number(m.sourceUid))) {
+        m.status = 'done';
+        moved++;
+      }
+    });
+    if (moved) {
+      scheduleSave();
+      if (currentPage === 'inbox') renderPage();
+    }
+    if (!silent) alert(moved ? `${moved}件を完了に移動しました。` : '移動・削除されたメールはありませんでした。');
+  } catch (e) {
+    if (!silent) alert('接続失敗: ' + e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '🔄 移動済みメールを完了にする'; }
+  }
 }
 
 // ============================================================
