@@ -3180,6 +3180,15 @@ function renderInboxDetail(id) {
           ${m.review ? `<div style="margin-top:12px;">
             <div style="font-size:11px;color:var(--text3);">${escHtml(CASE_REVIEW_CATEGORIES[m.review.category]?.label || '')} の検討結果（${fmtDateTime(m.review.generatedAt)} / ${escHtml(m.review.model||'')}）</div>
             <div class="inbox-body-text" style="margin-top:6px;">${escHtml(m.review.output)}</div>
+            ${(m.review.turns || []).map(t => `
+            <div style="margin-top:10px;padding-top:8px;border-top:1px dashed var(--border);">
+              <div style="font-size:11px;color:var(--text3);">${t.role === 'user' ? '🙋 追加質問' : '🤖 回答'}${t.at ? '（' + fmtDateTime(t.at) + '）' : ''}</div>
+              <div class="inbox-body-text" style="margin-top:4px;">${escHtml(t.text)}</div>
+            </div>`).join('')}
+            <div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--border);">
+              <textarea id="review-followup-${m.id}" rows="2" placeholder="この検討結果について追加で質問する（例: この論点についてもう少し詳しく）" style="width:100%;font-size:12px;box-sizing:border-box;"></textarea>
+              <button class="btn btn-outline btn-sm" style="margin-top:4px;" onclick="askReviewFollowup('${m.id}', this)">💬 質問を送る</button>
+            </div>
           </div>` : ''}
         </div>
       </div>
@@ -3291,6 +3300,29 @@ async function callClaudeRaw(model, systemPrompt, content, maxTokens) {
 }
 async function callClaude(systemPrompt, userPrompt) {
   return callClaudeRaw(FJ_CHEAP_MODEL, systemPrompt, userPrompt, 1024);
+}
+async function callClaudeMessages(model, systemPrompt, messages, maxTokens) {
+  const key = localStorage.getItem('fujino_anthropic_key');
+  if (!key) { alert('Anthropic APIキーが未設定です。サイドバーの「⚙ API設定確認」から設定してください。'); return null; }
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': key,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({ model, max_tokens: maxTokens || 1024, system: systemPrompt, messages }),
+    });
+    const json = await res.json();
+    if (json.error) { alert('AI呼び出しエラー: ' + (json.error.message || JSON.stringify(json.error))); return null; }
+    const textBlock = (json.content || []).find(b => b.type === 'text');
+    return textBlock ? textBlock.text : null;
+  } catch (e) {
+    alert('AI呼び出しに失敗しました: ' + e.message);
+    return null;
+  }
 }
 async function aiClassifyProject(id, btn) {
   const m = state.inbox[id];
@@ -3483,10 +3515,7 @@ async function loadAllInboxAttachments(id, btn) {
   renderPage();
   if (failed.length) alert(`次のファイルの読み込みに失敗しました: ${failed.join('、')}`);
 }
-async function startCaseReview(id, btn) {
-  const m = state.inbox[id];
-  if (!m) return;
-  const categoryKey = document.getElementById(`review-category-${id}`)?.value || 'legal_consult';
+function buildReviewInitialContent(m, categoryKey) {
   const cat = CASE_REVIEW_CATEGORIES[categoryKey];
   const attachments = m.attachments || [];
   const content = [];
@@ -3516,12 +3545,45 @@ async function startCaseReview(id, btn) {
     type: 'text',
     text: `件名: ${m.subject || ''}\n差出人: ${m.sender || ''}\n本文:\n${(m.body || '').slice(0, 3000)}\n\n上記メッセージ${attachments.length ? '・添付資料' : ''}について、${cat.label}の観点から検討してください。${note}`,
   });
+  return content;
+}
+async function startCaseReview(id, btn) {
+  const m = state.inbox[id];
+  if (!m) return;
+  const categoryKey = document.getElementById(`review-category-${id}`)?.value || 'legal_consult';
+  const cat = CASE_REVIEW_CATEGORIES[categoryKey];
+  const content = buildReviewInitialContent(m, categoryKey);
   if (btn) { btn.disabled = true; btn.textContent = '検討中...'; }
   const model = getReviewModel();
   const result = await callClaudeRaw(model, cat.sys, content, 4096);
   if (btn) { btn.disabled = false; btn.textContent = '▶ 検討を開始'; }
   if (!result) return;
-  m.review = { category: categoryKey, output: result, generatedAt: new Date().toISOString(), model };
+  m.review = { category: categoryKey, output: result, generatedAt: new Date().toISOString(), model, turns: [] };
+  scheduleSave();
+  renderPage();
+}
+async function askReviewFollowup(id, btn) {
+  const m = state.inbox[id];
+  if (!m || !m.review) return;
+  const input = document.getElementById(`review-followup-${id}`);
+  const question = (input?.value || '').trim();
+  if (!question) return;
+  const cat = CASE_REVIEW_CATEGORIES[m.review.category];
+  const initialContent = buildReviewInitialContent(m, m.review.category);
+  const messages = [
+    { role: 'user', content: initialContent },
+    { role: 'assistant', content: m.review.output },
+  ];
+  (m.review.turns || []).forEach(t => messages.push({ role: t.role, content: t.text }));
+  messages.push({ role: 'user', content: question });
+  if (btn) { btn.disabled = true; btn.textContent = '送信中...'; }
+  const result = await callClaudeMessages(m.review.model || getReviewModel(), cat.sys, messages, 4096);
+  if (btn) { btn.disabled = false; btn.textContent = '💬 質問を送る'; }
+  if (!result) return;
+  if (!m.review.turns) m.review.turns = [];
+  m.review.turns.push({ role: 'user', text: question, at: new Date().toISOString() });
+  m.review.turns.push({ role: 'assistant', text: result, at: new Date().toISOString() });
+  if (input) input.value = '';
   scheduleSave();
   renderPage();
 }
